@@ -1,0 +1,26 @@
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/*
+!.vscode/extensions.json
+
+## Rider / macOS
+.idea/
+.DS_Store
+
+## EF Core
+*.mdf
+*.ldf
+
+## Secrets - never commit real credentials
+appsettings.Development.json
+appsettings.Local.json
+**/secrets.json
+*.pfx
+
+## Logs
+*.log
+logs/
