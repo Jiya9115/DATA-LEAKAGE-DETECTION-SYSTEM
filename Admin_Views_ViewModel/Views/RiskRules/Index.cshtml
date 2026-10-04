@@ -1,0 +1,59 @@
+@model List<RiskRule>
+@{
+    ViewData["Title"] = "Risk Rules";
+}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="mb-0" style="font-weight:700">Risk Rule Builder</h3>
+        <p class="text-muted small mb-0">Configure how file activity is scored.</p>
+    </div>
+    <a class="btn-dlds btn-dlds-primary" asp-action="Create">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create Rule
+    </a>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="dlds-card empty-state">
+        <h4>No Risk Rules Yet</h4>
+        <p>Create a rule to control how specific file types and events are scored.</p>
+        <a class="btn-dlds btn-dlds-primary" asp-action="Create">Create Your First Rule</a>
+    </div>
+}
+else
+{
+    <div class="dlds-card p-0">
+        <div class="table-scroll">
+            <table class="dlds-table">
+                <thead><tr><th>Rule Name</th><th>Event</th><th>Extension</th><th>Min Size</th><th>Score</th><th>Level</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td><strong>@r.RuleName</strong><div class="small text-muted">@r.Description</div></td>
+                        <td>@(r.EventType?.ToString() ?? "Any")</td>
+                        <td class="mono">@(r.FileExtension ?? "Any")</td>
+                        <td>@(r.MinimumFileSizeBytes.HasValue ? $"{r.MinimumFileSizeBytes.Value / (1024*1024)} MB" : "—")</td>
+                        <td>@r.RiskScore</td>
+                        <td><partial name="_RiskBadge" model="r.RiskLevel" /></td>
+                        <td>
+                            <form asp-action="ToggleActive" asp-route-id="@r.Id" method="post" class="d-inline">
+                                <button class="btn-dlds btn-dlds-sm @(r.IsActive ? "btn-dlds-outline" : "btn-dlds-outline")" type="submit" style="@(r.IsActive ? "" : "color:var(--text-muted)")">
+                                    @(r.IsActive ? "Active" : "Inactive")
+                                </button>
+                            </form>
+                        </td>
+                        <td class="d-flex gap-2">
+                            <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-action="Edit" asp-route-id="@r.Id">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@r.Id" method="post" onsubmit="return confirm('Delete this rule?');">
+                                <button class="btn-dlds btn-dlds-danger btn-dlds-sm" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

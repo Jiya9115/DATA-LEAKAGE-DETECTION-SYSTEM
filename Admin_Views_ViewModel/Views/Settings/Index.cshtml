@@ -1,0 +1,45 @@
+@model SettingsViewModel
+@{
+    ViewData["Title"] = "Settings";
+}
+<div class="mb-4">
+    <h3 class="mb-0" style="font-weight:700">Settings</h3>
+    <p class="text-muted small mb-0">Configure monitoring behavior, risk thresholds, and alerts.</p>
+</div>
+
+<form asp-action="Save" method="post" style="max-width:700px">
+    <div class="dlds-card mb-3">
+        <h6>Risk Settings</h6>
+        <div class="mb-3">
+            <label class="form-label-dlds">Sensitive Extensions (comma-separated)</label>
+            <input asp-for="SensitiveExtensions" class="form-control-dlds mono" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label-dlds">Large File Threshold (MB)</label>
+            <input asp-for="LargeFileThresholdMb" type="number" class="form-control-dlds" />
+        </div>
+    </div>
+
+    <div class="dlds-card mb-3">
+        <h6>Alert Settings</h6>
+        <div class="form-check mb-2">
+            <input asp-for="AlertOnHighRisk" class="form-check-input" />
+            <label asp-for="AlertOnHighRisk" class="form-check-label small">Generate alerts for High risk events</label>
+        </div>
+        <div class="form-check">
+            <input asp-for="AlertOnCriticalRisk" class="form-check-input" />
+            <label asp-for="AlertOnCriticalRisk" class="form-check-label small">Generate alerts for Critical risk events</label>
+        </div>
+    </div>
+
+    <div class="dlds-card mb-3">
+        <h6>Appearance</h6>
+        <label class="form-label-dlds">Default Theme</label>
+        <select asp-for="DefaultTheme" class="form-select-dlds" style="max-width:220px">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn-dlds btn-dlds-primary">Save Settings</button>
+</form>

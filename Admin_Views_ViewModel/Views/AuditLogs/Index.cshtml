@@ -1,0 +1,32 @@
+@model List<AuditLog>
+@{
+    ViewData["Title"] = "Audit Logs";
+}
+<div class="mb-4">
+    <h3 class="mb-0" style="font-weight:700">Audit Log Timeline</h3>
+    <p class="text-muted small mb-0">A chronological record of important application actions.</p>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="dlds-card empty-state">
+        <h4>No Audit Activity Yet</h4>
+        <p>Actions like logins, folder changes, and rule edits will appear here.</p>
+    </div>
+}
+else
+{
+    <div class="dlds-card">
+        <div class="timeline">
+            @foreach (var log in Model)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-time">@log.Timestamp.ToString("MMM dd, yyyy HH:mm")</div>
+                    <strong>@log.Action</strong>
+                    <div class="small text-secondary-dlds">@log.Description</div>
+                    <div class="small text-muted">by @log.Username</div>
+                </div>
+            }
+        </div>
+    </div>
+}

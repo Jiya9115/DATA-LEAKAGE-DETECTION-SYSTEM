@@ -1,0 +1,66 @@
+@model RiskRuleFormViewModel
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Create Risk Rule" : "Edit Risk Rule";
+}
+<a asp-action="Index" class="small">&larr; Back to Risk Rules</a>
+
+<div class="dlds-card mt-3" style="max-width:640px">
+    <h5 class="mb-3">@(Model.Id == 0 ? "Create Rule" : "Edit Rule")</h5>
+    <form asp-action="Save" method="post">
+        <input type="hidden" asp-for="Id" />
+        <div asp-validation-summary="All" class="text-danger small mb-2"></div>
+
+        <div class="mb-3">
+            <label class="form-label-dlds">Rule Name</label>
+            <input asp-for="RuleName" class="form-control-dlds" placeholder="Sensitive File Modification" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label-dlds">Description</label>
+            <textarea asp-for="Description" class="form-control-dlds" rows="2"></textarea>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <label class="form-label-dlds">Event Type</label>
+                <select asp-for="EventType" class="form-select-dlds">
+                    <option value="">Any</option>
+                    @foreach (var v in Enum.GetValues<EventType>())
+                    {
+                        <option value="@v">@v</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label-dlds">Extension</label>
+                <input asp-for="FileExtension" class="form-control-dlds mono" placeholder=".xlsx" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label-dlds">Min File Size (MB)</label>
+                <input asp-for="MinimumFileSizeMb" type="number" class="form-control-dlds" placeholder="5" />
+            </div>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <label class="form-label-dlds">Risk Score (0-100)</label>
+                <input asp-for="RiskScore" type="number" min="0" max="100" class="form-control-dlds" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label-dlds">Risk Level</label>
+                <select asp-for="RiskLevel" class="form-select-dlds">
+                    @foreach (var v in Enum.GetValues<RiskLevel>())
+                    {
+                        <option value="@v">@v</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="form-check mb-4">
+            <input asp-for="IsActive" class="form-check-input" />
+            <label asp-for="IsActive" class="form-check-label small">Active</label>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn-dlds btn-dlds-primary">Save</button>
+            <a class="btn-dlds btn-dlds-outline" asp-action="Index">Cancel</a>
+        </div>
+    </form>
+</div>
