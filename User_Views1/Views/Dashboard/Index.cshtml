@@ -1,0 +1,173 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Overview";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="mb-0" style="font-weight:700">Security Overview</h3>
+        <p class="text-muted small mb-0">Live summary of monitored folders, file activity, and risk.</p>
+    </div>
+    <a class="btn-dlds btn-dlds-primary" asp-controller="Monitoring" asp-action="Index">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Folder
+    </a>
+</div>
+
+@if (!Model.HasAnyData)
+{
+    <div class="dlds-card empty-state">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <h4>No Security Events Found</h4>
+        <p>Once file activity is detected in your monitored folders, events will appear here.</p>
+        <a class="btn-dlds btn-dlds-primary" asp-controller="Monitoring" asp-action="Index">Configure Folder Monitoring</a>
+    </div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        @{
+            (string label, int value, string icon)[] stats =
+            {
+                ("Total Events", Model.TotalEvents, "M3 3v18h18"),
+                ("Files Created", Model.FilesCreated, "M12 5v14M5 12h14"),
+                ("Files Modified", Model.FilesModified, "M11 4h9M11 12h9M11 20h9M4 4l3 3-3 3M4 16l3 3-3 3"),
+                ("Files Deleted", Model.FilesDeleted, "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"),
+                ("High Risk Events", Model.HighRiskEvents, "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"),
+                ("Critical Alerts", Model.CriticalAlerts, "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"),
+                ("Active Monitors", Model.ActiveMonitoredFolders, "M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"),
+                ("Monitored Folders", Model.TotalMonitoredFolders, "M3 7l9-4 9 4-9 4-9-4z")
+            };
+        }
+        @foreach (var s in stats)
+        {
+            <div class="col-6 col-md-3">
+                <div class="dlds-card stat-card hoverable">
+                    <div class="stat-top">
+                        <div class="stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="@s.icon"/></svg></div>
+                    </div>
+                    <div class="stat-value">@s.value.ToString("N0")</div>
+                    <div class="stat-label">@s.label</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4">
+            <div class="dlds-card h-100">
+                <h6 class="mb-3">Events by Risk Level</h6>
+                <canvas id="riskChart" height="220"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="dlds-card h-100">
+                <h6 class="mb-3">Events by Type</h6>
+                <canvas id="typeChart" height="220"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="dlds-card h-100">
+                <h6 class="mb-3">Events over Time (7 days)</h6>
+                <canvas id="timeChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="dlds-card">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Recent File Events</h6>
+                    <a asp-controller="FileEvents" asp-action="Index" class="small">View all</a>
+                </div>
+                <div class="table-scroll">
+                    <table class="dlds-table">
+                        <thead><tr><th>File</th><th>Event</th><th>Risk</th><th>Time</th></tr></thead>
+                        <tbody id="live-events-body">
+                        @foreach (var e in Model.RecentEvents)
+                        {
+                            <tr>
+                                <td class="mono">@e.FileName</td>
+                                <td><partial name="_EventTypeBadge" model="e.EventType" /></td>
+                                <td><partial name="_RiskBadge" model="e.RiskLevel" /></td>
+                                <td class="text-muted small">@e.EventTimestamp.ToString("HH:mm:ss")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="dlds-card">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Recent Security Alerts</h6>
+                    <a asp-controller="Alerts" asp-action="Index" class="small">View all</a>
+                </div>
+                @if (!Model.RecentAlerts.Any())
+                {
+                    <p class="text-muted small mb-0">No alerts yet.</p>
+                }
+                else
+                {
+                    foreach (var a in Model.RecentAlerts)
+                    {
+                        <div class="d-flex justify-content-between align-items-start py-2" style="border-bottom:1px solid var(--border)">
+                            <div>
+                                <partial name="_RiskBadge" model="a.RiskLevel" />
+                                <div class="small mt-1">@a.Title</div>
+                            </div>
+                            <span class="text-muted small">@a.CreatedAt.ToString("HH:mm")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    const riskData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.EventsByRiskLevel));
+    const typeData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.EventsByType));
+    const timeLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.EventsOverTime.Select(x => x.Label)));
+    const timeValues = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.EventsOverTime.Select(x => x.Count)));
+
+    const riskColors = { Low: '#22c55e', Medium: '#f59e0b', High: '#f97316', Critical: '#ef4444' };
+
+    if (document.getElementById('riskChart')) {
+        new Chart(document.getElementById('riskChart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(riskData),
+                datasets: [{ data: Object.values(riskData), backgroundColor: Object.keys(riskData).map(k => riskColors[k] || '#64748b') }]
+            },
+            options: { plugins: { legend: { position: 'bottom', labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary') } } } }
+        });
+
+        new Chart(document.getElementById('typeChart'), {
+            type: 'bar',
+            data: { labels: Object.keys(typeData), datasets: [{ data: Object.values(typeData), backgroundColor: '#22d3ee' }] },
+            options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+        });
+
+        new Chart(document.getElementById('timeChart'), {
+            type: 'line',
+            data: { labels: timeLabels, datasets: [{ data: timeValues, borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.15)', fill: true, tension: 0.35 }] },
+            options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } } }
+        });
+    }
+
+    // Live-refresh the recent events table without a full page reload.
+    window.initDldsLivePoll('@Url.Action("LatestEventsJson", "Dashboard")', function (events) {
+        const body = document.getElementById('live-events-body');
+        if (!body || !events.length) return;
+        body.innerHTML = events.slice(0, 10).map(e => {
+            const riskCls = 'risk-' + e.riskLevel.toLowerCase();
+            const time = new Date(e.timestamp).toLocaleTimeString();
+            return `<tr><td class="mono">${e.fileName}</td><td><span class="event-type-badge">${e.eventType}</span></td><td><span class="risk-badge ${riskCls}">${e.riskLevel.toUpperCase()}</span></td><td class="text-muted small">${time}</td></tr>`;
+        }).join('');
+    }, 6000);
+</script>
+}

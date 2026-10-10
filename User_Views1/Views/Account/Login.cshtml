@@ -1,0 +1,50 @@
+@model DLDS.ViewModels.LoginViewModel
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "Sign In";
+}
+<div class="login-shell">
+    <div class="login-brand-pane">
+        <div class="text-center" style="max-width:380px">
+            <svg width="64" height="64" viewBox="0 0 40 40" fill="none" class="mb-3"><path d="M20 3 L34 9 V19 C34 28 28 34 20 37 C12 34 6 28 6 19 V9 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><path d="M15 19 L18.5 22.5 L26 14" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <h3 style="font-weight:700">DLDS</h3>
+            <p class="text-muted">Secure access to your monitoring environment.</p>
+            <div class="dlds-card mt-4 text-start">
+                <div class="d-flex justify-content-between small mb-2"><span class="text-muted">Demo Administrator</span><span class="mono">admin@dlds.local</span></div>
+                <div class="d-flex justify-content-between small mb-2"><span class="text-muted">Password</span><span class="mono">Admin@12345</span></div>
+                <hr />
+                <div class="d-flex justify-content-between small mb-2"><span class="text-muted">Demo User</span><span class="mono">analyst@dlds.local</span></div>
+                <div class="d-flex justify-content-between small"><span class="text-muted">Password</span><span class="mono">Analyst@12345</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-form-pane">
+        <div style="width:100%;max-width:340px">
+            <h4 class="mb-1">Sign In</h4>
+            <p class="text-muted small mb-4">Enter your credentials to continue.</p>
+
+            <form asp-controller="Account" asp-action="Login" method="post">
+                <input type="hidden" asp-for="ReturnUrl" />
+                <div asp-validation-summary="All" class="text-danger small mb-2"></div>
+
+                <div class="mb-3">
+                    <label class="form-label-dlds" asp-for="Email">Email</label>
+                    <input asp-for="Email" class="form-control-dlds" autocomplete="username" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label-dlds" asp-for="Password">Password</label>
+                    <input asp-for="Password" class="form-control-dlds" autocomplete="current-password" />
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <input asp-for="RememberMe" class="form-check-input" />
+                        <label asp-for="RememberMe" class="form-check-label small">Remember me</label>
+                    </div>
+                    <a href="#" class="small">Forgot password?</a>
+                </div>
+                <button type="submit" class="btn-dlds btn-dlds-primary w-100 justify-content-center">Sign In</button>
+            </form>
+        </div>
+    </div>
+</div>

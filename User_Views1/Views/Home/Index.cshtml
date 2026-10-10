@@ -1,0 +1,99 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "Home";
+}
+<section class="landing-hero">
+    <span class="demo-badge">SAMPLE / DEMO STATISTICS SHOWN BELOW</span>
+    <h1>DATA LEAKAGE<br />DETECTION SYSTEM</h1>
+    <p class="lead">Real-Time File Activity Monitoring &amp; Intelligent Risk Detection. Monitor sensitive file activities, identify suspicious behavior, assess security risks, and maintain a complete audit trail.</p>
+
+    <div class="d-flex justify-content-center gap-2 flex-wrap">
+        <a class="btn-dlds btn-dlds-primary" asp-controller="Account" asp-action="Login">Launch Security Dashboard</a>
+        <a class="btn-dlds btn-dlds-outline" asp-controller="Account" asp-action="Login">Start Monitoring</a>
+    </div>
+
+    <div class="hero-flow" aria-hidden="true">
+        <div class="flow-step">Folder</div><span class="flow-arrow">→</span>
+        <div class="flow-step">File Activity</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Detection Engine</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Risk Analysis</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Security Alert</div>
+    </div>
+
+    <div class="status-panel">
+        <div class="metric"><div class="val" style="color:var(--risk-low)">● PROTECTED</div><div class="lbl">System Status</div></div>
+        <div class="metric"><div class="val">04</div><div class="lbl">Monitored Folders</div></div>
+        <div class="metric"><div class="val">1,284</div><div class="lbl">Events Detected</div></div>
+        <div class="metric"><div class="val" style="color:var(--risk-high)">07</div><div class="lbl">High-Risk Events</div></div>
+    </div>
+</section>
+
+<section class="page-content" style="max-width:1200px">
+    <h2 class="text-center mb-4" style="font-weight:700">Everything you need to monitor file activity</h2>
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></div>
+            <h5>Real-Time Monitoring</h5>
+            <p class="text-muted small mb-0">Monitor selected folders using FileSystemWatcher.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg></div>
+            <h5>Intelligent Risk Assessment</h5>
+            <p class="text-muted small mb-0">Assign risk scores based on configurable security rules.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></div>
+            <h5>Security Alerts</h5>
+            <p class="text-muted small mb-0">Identify high-risk and critical file activities.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg></div>
+            <h5>Complete Audit Trail</h5>
+            <p class="text-muted small mb-0">Maintain detailed records of security-related activities.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></div>
+            <h5>Interactive Dashboard</h5>
+            <p class="text-muted small mb-0">Visualize events, risks, and activity trends.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg></div>
+            <h5>Detailed Reports</h5>
+            <p class="text-muted small mb-0">Generate reports for analysis and auditing.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <h5>Sensitive File Detection</h5>
+            <p class="text-muted small mb-0">Identify potentially sensitive file types.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 17l9 4 9-4M3 12l9 4 9-4"/></svg></div>
+            <h5>Multi-Folder Monitoring</h5>
+            <p class="text-muted small mb-0">Monitor multiple configured folders at once.</p>
+        </div>
+    </div>
+</section>
+
+<section class="page-content" style="max-width:900px">
+    <h2 class="text-center mb-4" style="font-weight:700">How It Works</h2>
+    <div class="how-it-works">
+        <div class="how-step"><div class="step-num">01</div>Select Folder</div>
+        <div class="how-step"><div class="step-num">02</div>Monitor File Activity</div>
+        <div class="how-step"><div class="step-num">03</div>Detect Event</div>
+        <div class="how-step"><div class="step-num">04</div>Analyze Risk</div>
+        <div class="how-step"><div class="step-num">05</div>Generate Alert</div>
+        <div class="how-step"><div class="step-num">06</div>Record Audit Log</div>
+    </div>
+</section>
+
+<section class="page-content text-center" style="max-width:700px">
+    <div class="security-score-ring">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="60" fill="none" stroke="var(--border)" stroke-width="10"/>
+            <circle cx="70" cy="70" r="60" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="30"/>
+        </svg>
+        <div class="score-text"><span>92%</span></div>
+    </div>
+    <h5 class="mt-3">SECURITY MONITORING STATUS</h5>
+    <p class="text-muted small">Protected monitoring coverage — a configurable application metric based on active folders and rule coverage, not a claim about your organization's overall security.</p>
+</section>

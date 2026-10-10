@@ -1,0 +1,10 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "Access Denied";
+}
+<div class="error-state" style="padding-top:100px">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg>
+    <h4>Access Denied</h4>
+    <p class="text-muted">You don't have permission to view this page. Contact an administrator if you believe this is a mistake.</p>
+    <a class="btn-dlds btn-dlds-primary" asp-controller="Dashboard" asp-action="Index">Return to Dashboard</a>
+</div>

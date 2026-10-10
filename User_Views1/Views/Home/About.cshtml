@@ -1,0 +1,36 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "About";
+}
+<div class="page-content" style="max-width:820px">
+    <h1 class="mb-4">About DLDS</h1>
+
+    <h5>What is data leakage?</h5>
+    <p class="text-secondary-dlds">Data leakage refers to the unauthorized or unintended movement, exposure, or destruction of sensitive information. It can happen through accidental deletion, unauthorized copying, malicious exfiltration, or misconfigured systems, and often leaves traces in ordinary file-system activity.</p>
+
+    <h5>Why file monitoring matters</h5>
+    <p class="text-secondary-dlds">Most data leakage incidents involve files being created, modified, deleted, or moved. Watching for unusual patterns in that activity — large sensitive files being created unexpectedly, rapid mass deletions, or scripts appearing in monitored locations — gives an early signal that something may need review.</p>
+
+    <h5>How FileSystemWatcher works</h5>
+    <p class="text-secondary-dlds">DLDS uses .NET's <span class="mono">FileSystemWatcher</span> to subscribe to operating-system-level notifications for a folder tree: creation, deletion, modification, and rename events. A background hosted service manages one watcher per active monitored folder, debounces duplicate notifications the OS can emit for a single save, and records every distinct event.</p>
+
+    <h5>How risk assessment works</h5>
+    <p class="text-secondary-dlds">Each event is scored by the Risk Assessment Service against administrator-configured rules (event type, extension, minimum size) and, where no rule matches, a set of built-in heuristics (rapid deletions, large files, sensitive extensions, executable/script files). Every score comes with a plain-language, explainable reason.</p>
+
+    <h5>How the system helps organizations</h5>
+    <p class="text-secondary-dlds">DLDS gives security-conscious teams and students a working example of continuous file monitoring, risk scoring, alerting, and audit trails — the same building blocks used in real data-loss-prevention tooling, without the licensing overhead of a commercial DLP platform.</p>
+
+    <div class="dlds-card mt-4" style="border-left:4px solid var(--risk-medium)">
+        <strong>Important:</strong>
+        <p class="mb-0 text-secondary-dlds">DLDS is a monitoring and detection system. It surfaces <em>Potential Data Leakage Activity</em> and <em>Suspicious File Activity</em> for human review — it does not, and cannot, guarantee 100% leak prevention or definitively prove that a leak occurred.</p>
+    </div>
+
+    <h5 class="mt-4">Technology stack</h5>
+    <ul class="text-secondary-dlds">
+        <li>ASP.NET Core MVC (C#) — cross-platform, runs on macOS</li>
+        <li>Entity Framework Core + SQL Server</li>
+        <li>ASP.NET Core Identity for authentication/roles</li>
+        <li>Bootstrap 5, vanilla JavaScript, Chart.js</li>
+        <li><span class="mono">FileSystemWatcher</span> running inside a <span class="mono">BackgroundService</span></li>
+    </ul>
+</div>
