@@ -1,0 +1,37 @@
+@model FileEvent
+@{
+    ViewData["Title"] = "Event Details";
+}
+<a asp-action="Index" class="small">&larr; Back to File Events</a>
+
+<div class="row g-3 mt-1">
+    <div class="col-lg-8">
+        <div class="dlds-card">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h4 class="mb-1 mono">@Model.FileName</h4>
+                    <span class="mono small text-muted">@Model.FilePath</span>
+                </div>
+                <partial name="_RiskBadge" model="Model.RiskLevel" />
+            </div>
+            <div class="row g-3 small">
+                <div class="col-6"><div class="text-muted">Event Type</div><div><partial name="_EventTypeBadge" model="Model.EventType" /></div></div>
+                <div class="col-6"><div class="text-muted">Timestamp</div><div>@Model.EventTimestamp.ToString("MMMM dd, yyyy HH:mm:ss") UTC</div></div>
+                <div class="col-6"><div class="text-muted">Extension</div><div class="mono">@Model.FileExtension</div></div>
+                <div class="col-6"><div class="text-muted">File Size</div><div>@(Model.FileSize.HasValue ? $"{Model.FileSize.Value / 1024.0:N0} KB" : "Unavailable (e.g. deleted file)")</div></div>
+                <div class="col-6"><div class="text-muted">Monitored Folder</div><div>@(Model.MonitoredFolder?.FolderName ?? "—")</div></div>
+                <div class="col-6"><div class="text-muted">Risk Score</div><div><strong>@Model.RiskScore / 100</strong></div></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="dlds-card mb-3">
+            <h6>Risk Analysis</h6>
+            <p class="small mb-0">@Model.Description</p>
+        </div>
+        <div class="dlds-card" style="border-left:4px solid var(--accent)">
+            <h6>Recommended Action</h6>
+            <p class="small mb-0">Review the activity and verify whether it was authorized. This system flags <em>Potential Data Leakage Activity</em> for review — it does not confirm that a leak occurred.</p>
+        </div>
+    </div>
+</div>

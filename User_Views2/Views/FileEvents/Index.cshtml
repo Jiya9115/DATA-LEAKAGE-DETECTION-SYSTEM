@@ -1,0 +1,121 @@
+@model FileEventListViewModel
+@{
+    ViewData["Title"] = "File Events";
+}
+<div class="mb-4">
+    <h3 class="mb-0" style="font-weight:700">File Activity Explorer</h3>
+    <p class="text-muted small mb-0">Search, filter, and drill into every recorded file event.</p>
+</div>
+
+<form method="get" class="dlds-card mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label-dlds">Search</label>
+            <input class="form-control-dlds" name="Search" value="@Model.Search" placeholder="File name or path..." />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label-dlds">Event Type</label>
+            <select class="form-select-dlds" name="EventType">
+                <option value="">All</option>
+                @foreach (var v in Enum.GetValues<EventType>())
+                {
+                    <option value="@v" selected="@(Model.EventType == v)">@v</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label-dlds">Risk Level</label>
+            <select class="form-select-dlds" name="RiskLevel">
+                <option value="">All</option>
+                @foreach (var v in Enum.GetValues<RiskLevel>())
+                {
+                    <option value="@v" selected="@(Model.RiskLevel == v)">@v</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label-dlds">Folder</label>
+            <select class="form-select-dlds" name="MonitoredFolderId">
+                <option value="">All</option>
+                @foreach (var f in Model.Folders)
+                {
+                    <option value="@f.Id" selected="@(Model.MonitoredFolderId == f.Id)">@f.FolderName</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label-dlds">From</label>
+            <input type="date" class="form-control-dlds" name="FromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="col-md-1">
+            <button class="btn-dlds btn-dlds-primary w-100" type="submit">Filter</button>
+        </div>
+    </div>
+</form>
+
+@if (!Model.Events.Any())
+{
+    <div class="dlds-card empty-state">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+        <h4>No Matching Events</h4>
+        <p>Try widening your filters, or check back once monitoring detects activity.</p>
+    </div>
+}
+else
+{
+    <div class="dlds-card p-0">
+        <div class="table-scroll">
+            <table class="dlds-table">
+                <thead>
+                    <tr><th>ID</th><th>File Name</th><th>Path</th><th>Event</th><th>Ext</th><th>Size</th><th>Risk</th><th>Score</th><th>Timestamp</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var e in Model.Events)
+                {
+                    <tr style="cursor:pointer" onclick="location.href='@Url.Action("Details", new { id = e.Id })'">
+                        <td class="text-muted small">#@e.Id</td>
+                        <td class="mono">@e.FileName</td>
+                        <td class="mono small text-muted" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@e.FilePath</td>
+                        <td><partial name="_EventTypeBadge" model="e.EventType" /></td>
+                        <td class="mono small">@e.FileExtension</td>
+                        <td class="small">@(e.FileSize.HasValue ? $"{e.FileSize.Value / 1024.0:N0} KB" : "—")</td>
+                        <td><partial name="_RiskBadge" model="e.RiskLevel" /></td>
+                        <td>@e.RiskScore</td>
+                        <td class="small text-muted">@e.EventTimestamp.ToString("MMM dd, HH:mm:ss")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <span class="text-muted small">Showing page @Model.Page of @Model.TotalPages (@Model.TotalCount total events)</span>
+        <div class="d-flex gap-2">
+            @if (Model.Page > 1)
+            {
+                <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-action="Index" asp-all-route-data="@GetRouteData(Model, Model.Page - 1)">Previous</a>
+            }
+            @if (Model.Page < Model.TotalPages)
+            {
+                <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-action="Index" asp-all-route-data="@GetRouteData(Model, Model.Page + 1)">Next</a>
+            }
+        </div>
+    </div>
+}
+
+@functions {
+    Dictionary<string, string> GetRouteData(FileEventListViewModel m, int page)
+    {
+        var d = new Dictionary<string, string>
+        {
+            ["Page"] = page.ToString(),
+            ["PageSize"] = m.PageSize.ToString()
+        };
+        if (!string.IsNullOrEmpty(m.Search)) d["Search"] = m.Search;
+        if (m.EventType.HasValue) d["EventType"] = m.EventType.ToString()!;
+        if (m.RiskLevel.HasValue) d["RiskLevel"] = m.RiskLevel.ToString()!;
+        if (m.MonitoredFolderId.HasValue) d["MonitoredFolderId"] = m.MonitoredFolderId.ToString()!;
+        return d;
+    }
+}

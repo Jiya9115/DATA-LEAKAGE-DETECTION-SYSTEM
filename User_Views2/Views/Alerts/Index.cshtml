@@ -1,0 +1,89 @@
+@model List<Alert>
+@{
+    ViewData["Title"] = "Security Alerts";
+    DateTime? fromDateVal = ViewBag.FromDate;
+    RiskLevel? riskLevelVal = ViewBag.RiskLevel;
+    bool unreadOnlyVal = ViewBag.UnreadOnly ?? false;
+}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="mb-0" style="font-weight:700">Alert Center</h3>
+        <p class="text-muted small mb-0">@ViewBag.UnreadCount unread alert(s)</p>
+    </div>
+    <form asp-action="MarkAllRead" method="post">
+        <button class="btn-dlds btn-dlds-outline" type="submit">Mark all as read</button>
+    </form>
+</div>
+
+<form method="get" class="dlds-card mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label-dlds">Risk Level</label>
+            <select class="form-select-dlds" name="riskLevel">
+                <option value="">All</option>
+                @foreach (var v in Enum.GetValues<RiskLevel>())
+                {
+                    <option value="@v" selected="@(riskLevelVal == v)">@v</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label-dlds">From Date</label>
+            <input type="date" class="form-control-dlds" name="fromDate" value="@fromDateVal?.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="col-md-3">
+            <div class="form-check mt-4">
+                <input type="checkbox" class="form-check-input" name="unreadOnly" value="true" id="unreadOnly" checked="@unreadOnlyVal" />
+                <label class="form-check-label small" for="unreadOnly">Unread only</label>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <button class="btn-dlds btn-dlds-primary w-100" type="submit">Filter</button>
+        </div>
+    </div>
+</form>
+
+@if (!Model.Any())
+{
+    <div class="dlds-card empty-state">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg>
+        <h4>No Alerts Found</h4>
+        <p>High and critical risk activity will appear here automatically.</p>
+    </div>
+}
+else
+{
+    @foreach (var group in Model.GroupBy(a => a.RiskLevel).OrderByDescending(g => g.Key))
+    {
+        <h6 class="text-muted mt-4 mb-2">@group.Key.ToString().ToUpper() (@group.Count())</h6>
+        @foreach (var a in group)
+        {
+            <div class="dlds-card mb-2 d-flex justify-content-between align-items-start @(a.IsRead ? "" : "")" style="@(a.IsRead ? "" : "border-left:4px solid var(--accent)")">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <partial name="_RiskBadge" model="a.RiskLevel" />
+                        @if (!a.IsRead)
+                        {
+                            <span class="badge" style="background:var(--accent-soft);color:var(--accent);font-size:10px">NEW</span>
+                        }
+                    </div>
+                    <strong>@a.Title</strong>
+                    <div class="small text-muted mt-1">@a.Message</div>
+                    <div class="small text-muted mt-1">@a.CreatedAt.ToString("MMM dd, yyyy HH:mm:ss")</div>
+                </div>
+                <div class="d-flex gap-2">
+                    @if (a.FileEventId > 0)
+                    {
+                        <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-controller="FileEvents" asp-action="Details" asp-route-id="@a.FileEventId">View Event</a>
+                    }
+                    @if (!a.IsRead)
+                    {
+                        <form asp-action="MarkRead" asp-route-id="@a.Id" method="post">
+                            <button class="btn-dlds btn-dlds-outline btn-dlds-sm" type="submit">Mark Read</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+    }
+}
