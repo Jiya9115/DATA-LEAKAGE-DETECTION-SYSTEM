@@ -1,0 +1,79 @@
+@model DLDS.ViewModels.RegisterViewModel
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "Create Account";
+}
+
+<div class="login-shell">
+    <div class="login-brand-pane">
+        <div class="text-center" style="max-width:380px">
+            <svg width="64" height="64" viewBox="0 0 40 40" fill="none" class="mb-3">
+                <path d="M20 3 L34 9 V19 C34 28 28 34 20 37 C12 34 6 28 6 19 V9 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+                <path d="M15 19 L18.5 22.5 L26 14" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3 style="font-weight:700">Join DLDS</h3>
+            <p class="text-muted">Register to monitor sensitive file events, detect leakages, and review security risks.</p>
+            <div class="dlds-card mt-4 text-start">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span>🛡️</span>
+                    <span class="small"><strong>Intelligent File Monitoring</strong></span>
+                </div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span>⚡</span>
+                    <span class="small"><strong>Real-Time Threat Detection</strong></span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span>📊</span>
+                    <span class="small"><strong>Interactive Risk Analytics</strong></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-form-pane">
+        <div style="width:100%;max-width:380px">
+            <h4 class="mb-1">Create Account</h4>
+            <p class="text-muted small mb-4">Register as a Security Analyst to get started.</p>
+
+            <form asp-controller="Account" asp-action="Register" method="post" novalidate>
+                <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+                <div class="mb-3">
+                    <label class="form-label-dlds" asp-for="DisplayName">Full Name</label>
+                    <input asp-for="DisplayName" class="form-control-dlds" placeholder="e.g. Jane Doe" autocomplete="name" />
+                    <span asp-validation-for="DisplayName" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label-dlds" asp-for="Email">Email Address</label>
+                    <input asp-for="Email" class="form-control-dlds" placeholder="name@company.com" autocomplete="username" />
+                    <span asp-validation-for="Email" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label-dlds" asp-for="Password">Password</label>
+                    <input asp-for="Password" class="form-control-dlds" placeholder="At least 8 characters" autocomplete="new-password" />
+                    <span asp-validation-for="Password" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label-dlds" asp-for="ConfirmPassword">Confirm Password</label>
+                    <input asp-for="ConfirmPassword" class="form-control-dlds" placeholder="Re-enter your password" autocomplete="new-password" />
+                    <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+                </div>
+
+                <button type="submit" class="btn-dlds btn-dlds-primary w-100 justify-content-center mb-3">Sign Up</button>
+
+                <div class="text-center small text-muted">
+                    Already have an account? <a asp-controller="Account" asp-action="Login" class="text-decoration-none fw-semibold">Sign In</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.5/jquery.validate.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validation-unobtrusive/4.0.0/jquery.validate.unobtrusive.min.js"></script>
+}

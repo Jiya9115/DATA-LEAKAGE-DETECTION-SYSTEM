@@ -107,6 +107,76 @@ namespace DLDS.Controllers
         }
 
         [HttpGet]
+        public IActionResult Register()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                return RedirectToAction("Index", "Dashboard");
+            }
+            return View(new RegisterViewModel());
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Register(RegisterViewModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+
+            try
+            {
+                var existingUser = await _userManager.FindByEmailAsync(model.Email);
+                if (existingUser != null)
+                {
+                    ModelState.AddModelError("Email", "An account with this email address already exists.");
+                    return View(model);
+                }
+
+                var user = new ApplicationUser
+                {
+                    UserName = model.Email,
+                    Email = model.Email,
+                    DisplayName = model.DisplayName.Trim(),
+                    CreatedAt = DateTime.UtcNow,
+                    EmailConfirmed = true
+                };
+
+                var createResult = await _userManager.CreateAsync(user, model.Password);
+                if (!createResult.Succeeded)
+                {
+                    foreach (var error in createResult.Errors)
+                    {
+                        ModelState.AddModelError(string.Empty, error.Description);
+                    }
+                    return View(model);
+                }
+
+                // Assign default role (User)
+                await _userManager.AddToRoleAsync(user, Roles.User);
+
+                // Audit log
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    Action = "Register",
+                    Description = $"New user registered: {model.Email} ({model.DisplayName}).",
+                    Username = model.Email,
+                    IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                });
+                await _db.SaveChangesAsync();
+
+                // Automatically sign in the newly registered user
+                await _signInManager.SignInAsync(user, isPersistent: false);
+
+                return RedirectToAction("Index", "Dashboard");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Registration failed for {Email}", model.Email);
+                ModelState.AddModelError(string.Empty, $"Registration failed: {ex.Message}. Check database configuration.");
+                return View(model);
+            }
+        }
+
+        [HttpGet]
         public IActionResult AccessDenied() => View();
     }
 }
