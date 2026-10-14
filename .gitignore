@@ -11,9 +11,12 @@ obj/
 .idea/
 .DS_Store
 
-## EF Core
+## EF Core / SQLite
 *.mdf
 *.ldf
+*.db
+*.db-shm
+*.db-wal
 
 ## Secrets - never commit real credentials
 appsettings.Development.json

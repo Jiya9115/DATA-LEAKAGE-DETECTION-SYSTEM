@@ -10,12 +10,53 @@ var builder = WebApplication.CreateBuilder(args);
 // Connection string comes from appsettings.json (dev placeholder) or, preferably,
 // an environment variable / user-secret so real credentials never live in source control:
 //   export ConnectionStrings__DefaultConnection="Server=...;Database=DLDS;User Id=...;Password=...;TrustServerCertificate=True;"
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+var configuredProvider = builder.Configuration["DatabaseProvider"] 
+    ?? builder.Configuration["DB_PROVIDER"] 
+    ?? "";
 
-// ---------- Services ----------
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+// Automatically determine whether to use SQLite or SQL Server:
+// 1. Explicitly requested via DatabaseProvider="Sqlite" or USE_SQLITE="true"
+// 2. Connection string points to a SQLite database (contains ".db" or starts with "Data Source=")
+// 3. Or running on Render / Cloud container / Production and no external SQL Server is configured (i.e. default localhost)
+bool isRender = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RENDER"));
+bool isExplicitSqlite = configuredProvider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase)
+    || builder.Configuration.GetValue<bool>("USE_SQLITE", false);
+
+bool isSqliteConnectionString = connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase)
+    || (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase) 
+        && !connectionString.Contains(",1433") 
+        && !connectionString.Contains("Server="));
+
+bool isDefaultLocalhost = string.IsNullOrWhiteSpace(connectionString)
+    || connectionString.Contains("localhost", StringComparison.OrdinalIgnoreCase)
+    || connectionString.Contains("127.0.0.1");
+
+bool useSqlite = isExplicitSqlite 
+    || isSqliteConnectionString 
+    || (isRender && isDefaultLocalhost)
+    || (builder.Environment.IsProduction() && isDefaultLocalhost);
+
+if (useSqlite)
+{
+    var sqliteConnection = isSqliteConnectionString 
+        ? connectionString 
+        : (builder.Configuration.GetConnectionString("SqliteConnection") ?? "Data Source=dlds.db");
+
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(sqliteConnection));
+}
+else
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer(connectionString, sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorNumbersToAdd: null);
+        }));
+}
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
@@ -86,15 +127,31 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = services.GetRequiredService<ApplicationDbContext>();
-        db.Database.Migrate();
+        if (db.Database.IsSqlite())
+        {
+            logger.LogInformation("Using SQLite database. Ensuring schema is created...");
+            db.Database.EnsureCreated();
+        }
+        else
+        {
+            logger.LogInformation("Using SQL Server database. Applying migrations...");
+            try
+            {
+                db.Database.Migrate();
+            }
+            catch (Exception migEx)
+            {
+                logger.LogWarning(migEx, "SQL Server migration failed; attempting EnsureCreated fallback...");
+                db.Database.EnsureCreated();
+            }
+        }
 
         await DbInitializer.SeedAsync(services);
+        logger.LogInformation("Database initialized and seeded successfully.");
     }
     catch (Exception ex)
     {
-        // Don't crash the whole app if the DB isn't reachable yet in dev;
-        // surface a clear log message instead so it's obvious during a viva.
-        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+        logger.LogError(ex, "An error occurred while initializing or seeding the database.");
     }
 }
 

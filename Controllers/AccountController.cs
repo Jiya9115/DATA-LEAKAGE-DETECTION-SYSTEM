@@ -40,39 +40,47 @@ namespace DLDS.Controllers
         {
             if (!ModelState.IsValid) return View(model);
 
-            var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
-
-            if (result.Succeeded)
+            try
             {
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user != null)
+                var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
+
+                if (result.Succeeded)
                 {
-                    user.LastLoginAt = DateTime.UtcNow;
-                    await _userManager.UpdateAsync(user);
+                    var user = await _userManager.FindByEmailAsync(model.Email);
+                    if (user != null)
+                    {
+                        user.LastLoginAt = DateTime.UtcNow;
+                        await _userManager.UpdateAsync(user);
+                    }
+
+                    _db.AuditLogs.Add(new AuditLog
+                    {
+                        Action = "Login",
+                        Description = $"{model.Email} signed in.",
+                        Username = model.Email,
+                        IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                    });
+                    await _db.SaveChangesAsync();
+
+                    if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+                        return Redirect(model.ReturnUrl);
+
+                    return RedirectToAction("Index", "Dashboard");
                 }
 
-                _db.AuditLogs.Add(new AuditLog
+                if (result.IsLockedOut)
                 {
-                    Action = "Login",
-                    Description = $"{model.Email} signed in.",
-                    Username = model.Email,
-                    IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
-                });
-                await _db.SaveChangesAsync();
-
-                if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
-                    return Redirect(model.ReturnUrl);
-
-                return RedirectToAction("Index", "Dashboard");
+                    ModelState.AddModelError(string.Empty, "This account has been temporarily locked due to multiple failed sign-in attempts.");
+                }
+                else
+                {
+                    ModelState.AddModelError(string.Empty, "Invalid email or password.");
+                }
             }
-
-            if (result.IsLockedOut)
+            catch (Exception ex)
             {
-                ModelState.AddModelError(string.Empty, "This account has been temporarily locked due to multiple failed sign-in attempts.");
-            }
-            else
-            {
-                ModelState.AddModelError(string.Empty, "Invalid email or password.");
+                _logger.LogError(ex, "Database connection error during login for {Email}", model.Email);
+                ModelState.AddModelError(string.Empty, $"Database connection failed: {ex.Message}. Check database configuration.");
             }
 
             return View(model);
