@@ -1,0 +1,12 @@
+@model RiskLevel
+@{
+    var cls = Model switch
+    {
+        RiskLevel.Low => "risk-low",
+        RiskLevel.Medium => "risk-medium",
+        RiskLevel.High => "risk-high",
+        RiskLevel.Critical => "risk-critical",
+        _ => "risk-low"
+    };
+}
+<span class="risk-badge @cls">@Model.ToString().ToUpper()</span>
