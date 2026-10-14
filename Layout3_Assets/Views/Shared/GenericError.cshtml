@@ -1,0 +1,10 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "Error " + ViewBag.StatusCode;
+}
+<div class="error-state" style="padding-top:100px">
+    <h1 style="font-size:72px;font-weight:800;color:var(--risk-medium);margin-bottom:0">@ViewBag.StatusCode</h1>
+    <h4>Unable to Complete Request</h4>
+    <p class="text-muted">Something went wrong while processing this page.</p>
+    <a class="btn-dlds btn-dlds-primary" asp-controller="Dashboard" asp-action="Index">Return to Dashboard</a>
+</div>

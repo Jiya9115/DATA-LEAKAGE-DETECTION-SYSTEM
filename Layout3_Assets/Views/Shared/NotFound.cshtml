@@ -1,0 +1,10 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "404 Not Found";
+}
+<div class="error-state" style="padding-top:100px">
+    <h1 style="font-size:72px;font-weight:800;color:var(--accent);margin-bottom:0">404</h1>
+    <h4>SECURITY ROUTE NOT FOUND</h4>
+    <p class="text-muted">The requested monitoring endpoint could not be located.</p>
+    <a class="btn-dlds btn-dlds-primary" asp-controller="Dashboard" asp-action="Index">Return to Dashboard</a>
+</div>
