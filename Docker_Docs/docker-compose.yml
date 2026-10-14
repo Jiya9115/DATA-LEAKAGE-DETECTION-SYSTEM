@@ -1,0 +1,49 @@
+# Brings up SQL Server + the DLDS web app together with one command:
+#   docker compose up --build
+#
+# The web app waits a few seconds for SQL Server to accept connections, then
+# Program.cs applies EF Core migrations and seed data automatically on startup —
+# no manual `dotnet ef` step needed when running this way.
+#
+# NOTE: this compose file builds migrations INSIDE the container at startup only
+# if a Migrations/ folder already exists in the image. If you haven't generated
+# migrations yet, run `dotnet ef migrations add InitialCreate` on your host first
+# (see README section 7) so the Migrations/ folder is present before `docker
+# compose up --build`, since the container itself has no EF CLI tool installed.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dlds-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+    ports:
+      - "1433:1433"
+    volumes:
+      - dlds_sql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dlds-web
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=DLDS;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;"
+    ports:
+      - "8080:8080"
+    volumes:
+      # So folders you create on your Mac can actually be monitored from inside the container.
+      - ${HOME}/Documents:/monitored/Documents
+
+volumes:
+  dlds_sql_data:
