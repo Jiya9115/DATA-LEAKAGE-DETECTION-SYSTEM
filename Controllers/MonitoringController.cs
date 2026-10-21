@@ -13,12 +13,21 @@ namespace DLDS.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly IFileMonitoringControl _monitoring;
+        private readonly IRiskAssessmentService _risk;
+        private readonly IAlertService _alerts;
         private readonly ILogger<MonitoringController> _logger;
 
-        public MonitoringController(ApplicationDbContext db, IFileMonitoringControl monitoring, ILogger<MonitoringController> logger)
+        public MonitoringController(
+            ApplicationDbContext db,
+            IFileMonitoringControl monitoring,
+            IRiskAssessmentService risk,
+            IAlertService alerts,
+            ILogger<MonitoringController> logger)
         {
             _db = db;
             _monitoring = monitoring;
+            _risk = risk;
+            _alerts = alerts;
             _logger = logger;
         }
 
@@ -35,6 +44,23 @@ namespace DLDS.Controllers
                 Folders = folders.Select(f =>
                 {
                     var stats = eventCounts.FirstOrDefault(x => x.FolderId == f.Id);
+                    bool pathExists = Directory.Exists(f.FolderPath);
+                    if (!pathExists && (f.FolderPath.Contains("App_Data") || f.FolderPath.Contains("Documents_Security")))
+                    {
+                        try { Directory.CreateDirectory(f.FolderPath); pathExists = true; } catch { }
+                    }
+
+                    int fileCount = 0;
+                    if (pathExists)
+                    {
+                        try
+                        {
+                            fileCount = Directory.EnumerateFiles(f.FolderPath, "*", SearchOption.AllDirectories)
+                                .Count(fn => !Path.GetFileName(fn).StartsWith("."));
+                        }
+                        catch { }
+                    }
+
                     return new MonitoredFolderCardViewModel
                     {
                         Id = f.Id,
@@ -44,9 +70,10 @@ namespace DLDS.Controllers
                         IsCurrentlyWatching = _monitoring.IsWatching(f.Id),
                         TotalEvents = stats?.Total ?? 0,
                         RiskEvents = stats?.Risk ?? 0,
+                        FileCount = fileCount,
                         LastMonitoredAt = f.LastMonitoredAt,
                         LastEventAt = stats?.Last,
-                        PathExists = Directory.Exists(f.FolderPath)
+                        PathExists = pathExists
                     };
                 }).OrderByDescending(f => f.IsActive).ThenBy(f => f.FolderName).ToList()
             };
@@ -54,27 +81,367 @@ namespace DLDS.Controllers
             return View(vm);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Details(int id)
+        {
+            var folder = await _db.MonitoredFolders.FindAsync(id);
+            if (folder == null) return NotFound();
+
+            bool pathExists = Directory.Exists(folder.FolderPath);
+            if (!pathExists && (folder.FolderPath.Contains("App_Data") || folder.FolderPath.Contains("Documents_Security")))
+            {
+                try { Directory.CreateDirectory(folder.FolderPath); pathExists = true; } catch { }
+            }
+
+            var events = await _db.FileEvents.AsNoTracking()
+                .Where(e => e.MonitoredFolderId == id)
+                .OrderByDescending(e => e.EventTimestamp)
+                .ToListAsync();
+
+            var fileList = new List<FolderFileItemViewModel>();
+
+            if (pathExists)
+            {
+                try
+                {
+                    var dirInfo = new DirectoryInfo(folder.FolderPath);
+                    var fsFiles = dirInfo.EnumerateFiles("*", SearchOption.AllDirectories)
+                        .Where(f => !f.Name.StartsWith(".") && !f.Attributes.HasFlag(FileAttributes.Hidden))
+                        .OrderByDescending(f => f.LastWriteTimeUtc);
+
+                    foreach (var file in fsFiles)
+                    {
+                        var relPath = Path.GetRelativePath(folder.FolderPath, file.FullName);
+                        var matchingEvents = events.Where(e => e.FileName.Equals(file.Name, StringComparison.OrdinalIgnoreCase)
+                                                            || e.FilePath.EndsWith(relPath)).ToList();
+                        var latestEvent = matchingEvents.FirstOrDefault();
+
+                        fileList.Add(new FolderFileItemViewModel
+                        {
+                            FileName = file.Name,
+                            RelativePath = relPath,
+                            FullPath = file.FullName,
+                            FileSizeBytes = file.Length,
+                            FileSizeFormatted = FormatBytes(file.Length),
+                            Extension = file.Extension,
+                            LastModified = file.LastWriteTimeUtc,
+                            LatestRiskLevel = latestEvent?.RiskLevel,
+                            LatestRiskScore = latestEvent?.RiskScore,
+                            LatestEventType = latestEvent?.EventType,
+                            LatestDescription = latestEvent?.Description,
+                            EventCount = matchingEvents.Count
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error reading files in folder {Path}", folder.FolderPath);
+                }
+            }
+
+            var vm = new FolderDetailsViewModel
+            {
+                FolderId = folder.Id,
+                FolderName = folder.FolderName,
+                FolderPath = folder.FolderPath,
+                IsActive = folder.IsActive,
+                IsCurrentlyWatching = _monitoring.IsWatching(folder.Id),
+                PathExists = pathExists,
+                TotalEvents = events.Count,
+                RiskEvents = events.Count(e => e.RiskLevel == RiskLevel.High || e.RiskLevel == RiskLevel.Critical),
+                CreatedAt = folder.CreatedAt,
+                LastMonitoredAt = folder.LastMonitoredAt,
+                Files = fileList,
+                RecentEvents = events.Take(30).ToList()
+            };
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Upload(int id, List<IFormFile> files)
+        {
+            var folder = await _db.MonitoredFolders.FindAsync(id);
+            if (folder == null) return NotFound();
+
+            if (files == null || files.Count == 0)
+            {
+                TempData["Error"] = "Please select at least one file from your Mac to upload.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            if (!Directory.Exists(folder.FolderPath))
+            {
+                Directory.CreateDirectory(folder.FolderPath);
+            }
+
+            int processed = 0;
+            var username = User.Identity?.Name ?? "system";
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            foreach (var formFile in files)
+            {
+                if (formFile.Length == 0) continue;
+
+                var safeName = Path.GetFileName(formFile.FileName);
+                var targetPath = Path.Combine(folder.FolderPath, safeName);
+                bool isModify = System.IO.File.Exists(targetPath);
+                var eventType = isModify ? EventType.Modified : EventType.Created;
+
+                // Mark processed so background watcher does not duplicate event
+                _monitoring.MarkEventProcessed(folder.Id, targetPath, eventType);
+
+                using (var stream = new FileStream(targetPath, FileMode.Create, FileAccess.Write))
+                {
+                    await formFile.CopyToAsync(stream);
+                }
+
+                var assessment = await _risk.AssessAsync(
+                    safeName,
+                    targetPath,
+                    eventType,
+                    formFile.Length,
+                    folder.Id);
+
+                var fileEvent = new FileEvent
+                {
+                    FileName = safeName,
+                    FilePath = targetPath,
+                    EventType = eventType,
+                    EventTimestamp = DateTime.UtcNow,
+                    FileExtension = Path.GetExtension(safeName),
+                    FileSize = formFile.Length,
+                    RiskLevel = assessment.RiskLevel,
+                    RiskScore = assessment.RiskScore,
+                    Description = assessment.Reason,
+                    MonitoredFolderId = folder.Id
+                };
+
+                _db.FileEvents.Add(fileEvent);
+                await _db.SaveChangesAsync();
+
+                await _alerts.CreateAlertIfNeededAsync(fileEvent, assessment.Reason);
+
+                var actionName = isModify ? "FileModified" : "FileUploaded";
+                var auditDesc = $"User '{username}' {(isModify ? "modified (re-uploaded)" : "uploaded")} file '{safeName}' ({FormatBytes(formFile.Length)}) to folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}";
+
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    Action = actionName,
+                    Description = auditDesc,
+                    Username = username,
+                    IPAddress = ipAddress,
+                    Timestamp = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync();
+
+                processed++;
+            }
+
+            folder.LastMonitoredAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = $"Successfully uploaded and processed {processed} file(s) from your Mac. Detection events, risk score, and audit logs recorded.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ModifyFile(int id, string fileName, string? textContent, IFormFile? replacementFile)
+        {
+            var folder = await _db.MonitoredFolders.FindAsync(id);
+            if (folder == null) return NotFound();
+
+            var safeName = Path.GetFileName(fileName);
+            var targetPath = Path.Combine(folder.FolderPath, safeName);
+
+            if (!System.IO.File.Exists(targetPath))
+            {
+                TempData["Error"] = $"File \"{safeName}\" not found in monitored folder.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            _monitoring.MarkEventProcessed(folder.Id, targetPath, EventType.Modified);
+
+            long newSize = 0;
+            if (replacementFile != null && replacementFile.Length > 0)
+            {
+                using (var stream = new FileStream(targetPath, FileMode.Create, FileAccess.Write))
+                {
+                    await replacementFile.CopyToAsync(stream);
+                }
+                newSize = replacementFile.Length;
+            }
+            else if (textContent != null)
+            {
+                await System.IO.File.WriteAllTextAsync(targetPath, textContent);
+                newSize = new FileInfo(targetPath).Length;
+            }
+            else
+            {
+                await System.IO.File.AppendAllTextAsync(targetPath, $"\n# Modified by DLDS at {DateTime.UtcNow:u}\n");
+                newSize = new FileInfo(targetPath).Length;
+            }
+
+            var assessment = await _risk.AssessAsync(
+                safeName,
+                targetPath,
+                EventType.Modified,
+                newSize,
+                folder.Id);
+
+            var fileEvent = new FileEvent
+            {
+                FileName = safeName,
+                FilePath = targetPath,
+                EventType = EventType.Modified,
+                EventTimestamp = DateTime.UtcNow,
+                FileExtension = Path.GetExtension(safeName),
+                FileSize = newSize,
+                RiskLevel = assessment.RiskLevel,
+                RiskScore = assessment.RiskScore,
+                Description = assessment.Reason,
+                MonitoredFolderId = folder.Id
+            };
+
+            _db.FileEvents.Add(fileEvent);
+            await _db.SaveChangesAsync();
+
+            await _alerts.CreateAlertIfNeededAsync(fileEvent, assessment.Reason);
+
+            var username = User.Identity?.Name ?? "system";
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            _db.AuditLogs.Add(new AuditLog
+            {
+                Action = "FileModified",
+                Description = $"User '{username}' modified file '{safeName}' ({FormatBytes(newSize)}) in folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}",
+                Username = username,
+                IPAddress = ipAddress,
+                Timestamp = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            folder.LastMonitoredAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = $"File \"{safeName}\" modified. Risk score and audit log recorded.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteFile(int id, string fileName)
+        {
+            var folder = await _db.MonitoredFolders.FindAsync(id);
+            if (folder == null) return NotFound();
+
+            var safeName = Path.GetFileName(fileName);
+            var targetPath = Path.Combine(folder.FolderPath, safeName);
+
+            if (System.IO.File.Exists(targetPath))
+            {
+                _monitoring.MarkEventProcessed(folder.Id, targetPath, EventType.Deleted);
+                System.IO.File.Delete(targetPath);
+            }
+
+            var assessment = await _risk.AssessAsync(
+                safeName,
+                targetPath,
+                EventType.Deleted,
+                null,
+                folder.Id);
+
+            var fileEvent = new FileEvent
+            {
+                FileName = safeName,
+                FilePath = targetPath,
+                EventType = EventType.Deleted,
+                EventTimestamp = DateTime.UtcNow,
+                FileExtension = Path.GetExtension(safeName),
+                FileSize = null,
+                RiskLevel = assessment.RiskLevel,
+                RiskScore = assessment.RiskScore,
+                Description = assessment.Reason,
+                MonitoredFolderId = folder.Id
+            };
+
+            _db.FileEvents.Add(fileEvent);
+            await _db.SaveChangesAsync();
+
+            await _alerts.CreateAlertIfNeededAsync(fileEvent, assessment.Reason);
+
+            var username = User.Identity?.Name ?? "system";
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            _db.AuditLogs.Add(new AuditLog
+            {
+                Action = "FileDeleted",
+                Description = $"User '{username}' deleted file '{safeName}' from folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}",
+                Username = username,
+                IPAddress = ipAddress,
+                Timestamp = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            folder.LastMonitoredAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = $"File \"{safeName}\" deleted. Risk score and audit log recorded.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DownloadFile(int id, string fileName)
+        {
+            var folder = await _db.MonitoredFolders.FindAsync(id);
+            if (folder == null) return NotFound();
+
+            var safeName = Path.GetFileName(fileName);
+            var targetPath = Path.Combine(folder.FolderPath, safeName);
+
+            if (!System.IO.File.Exists(targetPath)) return NotFound();
+
+            return PhysicalFile(targetPath, "application/octet-stream", safeName);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Add(AddFolderViewModel model)
         {
-            if (!ModelState.IsValid)
+            if (string.IsNullOrWhiteSpace(model.FolderName))
             {
-                TempData["Error"] = "Please provide a valid folder name and path.";
+                TempData["Error"] = "Please provide a valid folder name.";
                 return RedirectToAction(nameof(Index));
             }
 
-            var path = model.FolderPath.Trim();
-
-            if (!Directory.Exists(path))
+            string path;
+            if (model.UseManagedStorage || string.IsNullOrWhiteSpace(model.FolderPath))
             {
-                TempData["Error"] = $"The folder \"{path}\" does not exist or the application does not have permission to access it.";
+                var safeName = string.Join("_", model.FolderName.Split(Path.GetInvalidFileNameChars())).Trim();
+                if (string.IsNullOrEmpty(safeName)) safeName = "Folder_" + Guid.NewGuid().ToString("N")[..6];
+                path = Path.Combine(AppContext.BaseDirectory, "App_Data", "MonitoredFolders", safeName);
+            }
+            else
+            {
+                path = model.FolderPath.Trim();
+            }
+
+            try
+            {
+                if (!Directory.Exists(path))
+                    Directory.CreateDirectory(path);
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = $"Unable to create or access folder \"{path}\": {ex.Message}";
                 return RedirectToAction(nameof(Index));
             }
 
             if (await _db.MonitoredFolders.AnyAsync(f => f.FolderPath == path))
             {
-                TempData["Error"] = "This folder is already being monitored.";
+                TempData["Error"] = "This folder path is already being monitored.";
                 return RedirectToAction(nameof(Index));
             }
 
@@ -97,8 +464,8 @@ namespace DLDS.Controllers
                 await _db.SaveChangesAsync();
             }
 
-            TempData["Success"] = $"Folder \"{folder.FolderName}\" added successfully.";
-            return RedirectToAction(nameof(Index));
+            TempData["Success"] = $"Folder \"{folder.FolderName}\" added successfully. You can now upload files from your Mac.";
+            return RedirectToAction(nameof(Details), new { id = folder.Id });
         }
 
         [HttpPost]
@@ -110,8 +477,12 @@ namespace DLDS.Controllers
 
             if (!Directory.Exists(folder.FolderPath))
             {
-                TempData["Error"] = $"Cannot start monitoring — the folder \"{folder.FolderPath}\" no longer exists.";
-                return RedirectToAction(nameof(Index));
+                try { Directory.CreateDirectory(folder.FolderPath); }
+                catch
+                {
+                    TempData["Error"] = $"Cannot start monitoring — folder \"{folder.FolderPath}\" cannot be created or accessed.";
+                    return RedirectToAction(nameof(Index));
+                }
             }
 
             await _monitoring.StartWatchingAsync(id);
@@ -162,8 +533,24 @@ namespace DLDS.Controllers
                 Action = action,
                 Description = description,
                 Username = User.Identity?.Name ?? "system",
-                IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                Timestamp = DateTime.UtcNow
             });
+            await Task.CompletedTask;
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes == 0) return "0 B";
+            string[] suffixes = { "B", "KB", "MB", "GB" };
+            int i = 0;
+            double d = bytes;
+            while (d >= 1024 && i < suffixes.Length - 1)
+            {
+                d /= 1024;
+                i++;
+            }
+            return $"{d:0.##} {suffixes[i]}";
         }
     }
 }

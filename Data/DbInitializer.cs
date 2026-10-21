@@ -129,12 +129,14 @@ namespace DLDS.Data
 
         private static async Task<MonitoredFolder> SeedFolderAsync(ApplicationDbContext db)
         {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var folderPath = Path.Combine(AppContext.BaseDirectory, "App_Data", "MonitoredFolders", "Documents_Security");
+            try { Directory.CreateDirectory(folderPath); } catch { }
+
             var folder = new MonitoredFolder
             {
                 FolderName = "Documents Security",
-                FolderPath = Path.Combine(home, "Documents", "SensitiveData"),
-                IsActive = false,
+                FolderPath = folderPath,
+                IsActive = true,
                 CreatedAt = DateTime.UtcNow.AddDays(-14),
                 LastMonitoredAt = DateTime.UtcNow.AddHours(-2),
                 IsSampleData = true

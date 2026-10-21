@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h3 class="mb-0" style="font-weight:700">Folder Monitoring</h3>
-        <p class="text-muted small mb-0">Add folders for real-time FileSystemWatcher monitoring.</p>
+        <p class="text-muted small mb-0">Manage directories, watch real-time activity, and upload files from your Mac.</p>
     </div>
     <button class="btn-dlds btn-dlds-primary" data-bs-toggle="modal" data-bs-target="#addFolderModal">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -18,7 +18,7 @@
     <div class="dlds-card empty-state">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l9-4 9 4-9 4-9-4z"/></svg>
         <h4>No Monitored Folders Yet</h4>
-        <p>Add a folder to start watching it for file activity.</p>
+        <p>Add a folder to start watching it for file activity and uploading files from your Mac.</p>
         <button class="btn-dlds btn-dlds-primary" data-bs-toggle="modal" data-bs-target="#addFolderModal">Add Your First Folder</button>
     </div>
 }
@@ -48,25 +48,33 @@ else
                     {
                         <div class="small mb-2" style="color:var(--risk-high)">⚠ Path not found on this machine</div>
                     }
-                    <div class="d-flex gap-3 mb-3 small text-muted">
+                    <div class="d-flex gap-3 mb-3 small text-muted flex-wrap">
+                        <span><strong style="color:var(--accent)">@f.FileCount</strong> files</span>
                         <span><strong style="color:var(--text-primary)">@f.TotalEvents</strong> events</span>
                         <span><strong style="color:var(--risk-high)">@f.RiskEvents</strong> risk events</span>
                     </div>
                     <div class="mt-auto d-flex gap-2 flex-wrap">
-                        <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-controller="FileEvents" asp-action="Index" asp-route-monitoredFolderId="@f.Id">View</a>
+                        <a class="btn-dlds btn-dlds-primary btn-dlds-sm d-flex align-items-center gap-1" asp-action="Details" asp-route-id="@f.Id">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Files & Upload
+                        </a>
+                        <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-controller="FileEvents" asp-action="Index" asp-route-monitoredFolderId="@f.Id">Events</a>
                         @if (f.IsCurrentlyWatching)
                         {
                             <form asp-controller="Monitoring" asp-action="Stop" asp-route-id="@f.Id" method="post">
+                                @Html.AntiForgeryToken()
                                 <button class="btn-dlds btn-dlds-outline btn-dlds-sm" type="submit">Pause</button>
                             </form>
                         }
                         else
                         {
                             <form asp-controller="Monitoring" asp-action="Start" asp-route-id="@f.Id" method="post">
-                                <button class="btn-dlds btn-dlds-primary btn-dlds-sm" type="submit">Start</button>
+                                @Html.AntiForgeryToken()
+                                <button class="btn-dlds btn-dlds-outline btn-dlds-sm" type="submit">Start</button>
                             </form>
                         }
                         <form asp-controller="Monitoring" asp-action="Delete" asp-route-id="@f.Id" method="post" onsubmit="return confirm('Remove this folder from monitoring? This also deletes its recorded events.');">
+                            @Html.AntiForgeryToken()
                             <button class="btn-dlds btn-dlds-danger btn-dlds-sm" type="submit">Delete</button>
                         </form>
                     </div>
@@ -80,6 +88,7 @@ else
     <div class="modal-dialog">
         <div class="modal-content" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary)">
             <form asp-controller="Monitoring" asp-action="Add" method="post">
+                @Html.AntiForgeryToken()
                 <div class="modal-header" style="border-color:var(--border)">
                     <h5 class="modal-title">Add Monitored Folder</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -87,13 +96,35 @@ else
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label-dlds">Folder Name</label>
-                        <input name="FolderName" class="form-control-dlds" placeholder="Documents Security" required />
+                        <input name="FolderName" class="form-control-dlds" placeholder="e.g. Sensitive Financial Data" required />
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label-dlds">Folder Path</label>
-                        <input name="FolderPath" class="form-control-dlds mono" placeholder="/Users/yourname/Documents/SensitiveData" required />
-                        <div class="small text-muted mt-1">Must be a valid, existing folder path on this Mac.</div>
+                        <label class="form-label-dlds">Storage Mode</label>
+                        <div class="d-flex flex-column gap-2 p-2 rounded" style="background:var(--bg);border:1px solid var(--border)">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="UseManagedStorage" id="modeManaged" value="true" checked onchange="toggleStorageMode(true)" />
+                                <label class="form-check-label" for="modeManaged" style="font-weight:600">
+                                    Managed Cloud / App Storage <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Recommended</span>
+                                </label>
+                                <div class="small text-muted">Automatically creates a secure storage directory. Perfect for Render & browser file uploads from your Mac.</div>
+                            </div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="radio" name="UseManagedStorage" id="modeCustom" value="false" onchange="toggleStorageMode(false)" />
+                                <label class="form-check-label" for="modeCustom">
+                                    Custom Server Directory Path
+                                </label>
+                                <div class="small text-muted">Use an existing folder path directly on the host machine (e.g. for local Mac daemon).</div>
+                            </div>
+                        </div>
                     </div>
+
+                    <div class="mb-3" id="customPathGroup" style="display:none">
+                        <label class="form-label-dlds">Folder Path</label>
+                        <input name="FolderPath" id="customFolderPathInput" class="form-control-dlds mono" placeholder="/Users/yourname/Documents/SensitiveData" />
+                        <div class="small text-muted mt-1">Must be an accessible directory path on the server/Mac.</div>
+                    </div>
+
                     <div class="form-check">
                         <input type="checkbox" class="form-check-input" name="StartImmediately" value="true" id="startNow" checked />
                         <label class="form-check-label small" for="startNow">Start monitoring immediately</label>
@@ -107,3 +138,19 @@ else
         </div>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    function toggleStorageMode(isManaged) {
+        const group = document.getElementById('customPathGroup');
+        const input = document.getElementById('customFolderPathInput');
+        if (isManaged) {
+            group.style.display = 'none';
+            input.removeAttribute('required');
+        } else {
+            group.style.display = 'block';
+            input.setAttribute('required', 'required');
+        }
+    }
+</script>
+}

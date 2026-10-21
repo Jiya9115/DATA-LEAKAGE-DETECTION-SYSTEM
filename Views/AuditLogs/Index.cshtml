@@ -4,14 +4,14 @@
 }
 <div class="mb-4">
     <h3 class="mb-0" style="font-weight:700">Audit Log Timeline</h3>
-    <p class="text-muted small mb-0">A chronological record of important application actions.</p>
+    <p class="text-muted small mb-0">A chronological, immutable record of important application actions and file modifications.</p>
 </div>
 
 @if (!Model.Any())
 {
     <div class="dlds-card empty-state">
         <h4>No Audit Activity Yet</h4>
-        <p>Actions like logins, folder changes, and rule edits will appear here.</p>
+        <p>Actions like file uploads, modifications, logins, folder changes, and rule edits will appear here.</p>
     </div>
 }
 else
@@ -21,10 +21,37 @@ else
             @foreach (var log in Model)
             {
                 <div class="timeline-item">
-                    <div class="timeline-time">@log.Timestamp.ToString("MMM dd, yyyy HH:mm")</div>
-                    <strong>@log.Action</strong>
-                    <div class="small text-secondary-dlds">@log.Description</div>
-                    <div class="small text-muted">by @log.Username</div>
+                    <div class="timeline-time">@log.Timestamp.ToString("MMM dd, yyyy HH:mm:ss")</div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        @if (log.Action.Contains("Upload", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="status-pill" style="background:rgba(34, 197, 94, 0.15);color:var(--risk-low);font-size:11px">📤 @log.Action</span>
+                        }
+                        else if (log.Action.Contains("Modif", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="status-pill" style="background:rgba(59, 130, 246, 0.15);color:#38bdf8;font-size:11px">✏️ @log.Action</span>
+                        }
+                        else if (log.Action.Contains("Delet", StringComparison.OrdinalIgnoreCase) || log.Action.Contains("Remove", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="status-pill" style="background:rgba(239, 68, 68, 0.15);color:var(--risk-critical);font-size:11px">🗑️ @log.Action</span>
+                        }
+                        else if (log.Action.Contains("Login", StringComparison.OrdinalIgnoreCase) || log.Action.Contains("Auth", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <span class="status-pill" style="background:rgba(168, 85, 247, 0.15);color:#c084fc;font-size:11px">🔑 @log.Action</span>
+                        }
+                        else
+                        {
+                            <span class="status-pill" style="background:var(--bg-hover);color:var(--accent);font-size:11px">⚡ @log.Action</span>
+                        }
+                    </div>
+                    <div class="text-secondary-dlds" style="font-size:14px;word-break:break-word">@log.Description</div>
+                    <div class="small text-muted mt-1">
+                        by <strong style="color:var(--text-primary)">@log.Username</strong> 
+                        @if (!string.IsNullOrEmpty(log.IPAddress))
+                        {
+                            <span> &bull; IP: @log.IPAddress</span>
+                        }
+                    </div>
                 </div>
             }
         </div>

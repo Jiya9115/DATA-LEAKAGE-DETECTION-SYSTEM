@@ -14,6 +14,7 @@ namespace DLDS.Services
         Task StartWatchingAsync(int monitoredFolderId, CancellationToken ct = default);
         Task StopWatchingAsync(int monitoredFolderId, CancellationToken ct = default);
         bool IsWatching(int monitoredFolderId);
+        void MarkEventProcessed(int folderId, string fullPath, EventType eventType);
     }
 
     /// <summary>
@@ -45,6 +46,12 @@ namespace DLDS.Services
         }
 
         public bool IsWatching(int monitoredFolderId) => _watchers.ContainsKey(monitoredFolderId);
+
+        public void MarkEventProcessed(int folderId, string fullPath, EventType eventType)
+        {
+            var key = $"{folderId}|{fullPath}|{eventType}";
+            _recentEvents[key] = DateTime.UtcNow;
+        }
 
         public async Task StartWatchingAsync(int monitoredFolderId, CancellationToken ct = default)
         {
@@ -132,6 +139,11 @@ namespace DLDS.Services
         private void AttachWatcher(MonitoredFolder folder)
         {
             if (_watchers.ContainsKey(folder.Id)) return;
+
+            if (!Directory.Exists(folder.FolderPath))
+            {
+                try { Directory.CreateDirectory(folder.FolderPath); } catch { }
+            }
 
             if (!Directory.Exists(folder.FolderPath))
             {
