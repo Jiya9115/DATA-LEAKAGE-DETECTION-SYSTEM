@@ -100,6 +100,29 @@ namespace DLDS.Services
                     $"Rapid, repeated deletions ({recentDeletesInFolder + 1} files within {RapidEventWindowSeconds} seconds) detected. Suspicious File Activity.");
             }
 
+            // Duplicate file / Data staging heuristic
+            if (eventType == EventType.Created || eventType == EventType.Modified)
+            {
+                bool isDuplicateName = IsDuplicateNamePattern(fileName);
+                bool isDuplicateContent = await IsDuplicateInDatabaseAsync(fileName, fileSizeBytes, extension, monitoredFolderId, ct);
+
+                if (isDuplicateName || isDuplicateContent)
+                {
+                    string dupReason = isDuplicateName 
+                        ? $"Duplicate file copy pattern detected in filename (\"{fileName}\")"
+                        : $"Duplicate file content or cross-folder replication detected for \"{fileName}\"";
+
+                    if (isSensitiveExt)
+                    {
+                        return new RiskAssessmentResult(85, RiskLevel.Critical,
+                            $"{dupReason} containing sensitive data ({extension}). High probability of data staging or unauthorized replication for data exfiltration.");
+                    }
+
+                    return new RiskAssessmentResult(65, RiskLevel.High,
+                        $"{dupReason}. Suspicious unauthorized file duplication.");
+                }
+            }
+
             if (isScriptOrExecutable && (eventType == EventType.Created || eventType == EventType.Modified))
             {
                 return new RiskAssessmentResult(70, RiskLevel.High,
@@ -171,6 +194,45 @@ namespace DLDS.Services
             if (!bytes.HasValue) return "unknown size";
             double mb = bytes.Value / (1024.0 * 1024.0);
             return $"{mb:0.0} MB";
+        }
+
+        private static bool IsDuplicateNamePattern(string fileName)
+        {
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            if (string.IsNullOrWhiteSpace(name)) return false;
+
+            // Matches common macOS, Windows, and user duplication patterns:
+            // "payroll copy", "payroll copy 2", "payroll - Copy", "payroll (1)", "copy of payroll", "payroll_copy", "payroll_backup"
+            var pattern = @"(^copy(\s+of|\s*-)?\s+|[\s_-]copy(\s*\d+)?$|\(\d+\)$|[\s_-]dup(licate)?$|[\s_-]backup$)";
+            return System.Text.RegularExpressions.Regex.IsMatch(name, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+
+        private async Task<bool> IsDuplicateInDatabaseAsync(string fileName, long? fileSizeBytes, string extension, int monitoredFolderId, CancellationToken ct)
+        {
+            try
+            {
+                if (fileSizeBytes.HasValue && fileSizeBytes.Value > 100)
+                {
+                    var sameContent = await _db.FileEvents
+                        .AnyAsync(e => e.FileSize == fileSizeBytes.Value 
+                                    && e.FileExtension == extension 
+                                    && e.FileName != fileName 
+                                    && e.EventType != EventType.Deleted, ct);
+
+                    if (sameContent) return true;
+                }
+
+                var crossFolder = await _db.FileEvents
+                    .AnyAsync(e => e.FileName.ToLower() == fileName.ToLower() 
+                                && e.MonitoredFolderId != monitoredFolderId 
+                                && e.EventType != EventType.Deleted, ct);
+
+                return crossFolder;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
