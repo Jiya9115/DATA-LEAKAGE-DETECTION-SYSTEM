@@ -67,15 +67,33 @@ else
         <div class="table-scroll">
             <table class="dlds-table">
                 <thead>
-                    <tr><th>ID</th><th>File Name</th><th>Path</th><th>Event</th><th>Ext</th><th>Size</th><th>Risk</th><th>Score</th><th>Timestamp</th></tr>
+                    <tr>
+                        <th>ID</th>
+                        <th>File Name</th>
+                        @if (ViewBag.IsAdmin == true)
+                        {
+                            <th>User</th>
+                        }
+                        <th>Path</th>
+                        <th>Event</th>
+                        <th>Ext</th>
+                        <th>Size</th>
+                        <th>Risk</th>
+                        <th>Score</th>
+                        <th>Timestamp</th>
+                    </tr>
                 </thead>
                 <tbody>
                 @foreach (var e in Model.Events)
                 {
                     <tr style="cursor:pointer" onclick="location.href='@Url.Action("Details", new { id = e.Id })'">
                         <td class="text-muted small">#@e.Id</td>
-                        <td class="mono">@e.FileName</td>
-                        <td class="mono small text-muted" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@e.FilePath</td>
+                        <td class="mono font-weight-bold">@e.FileName</td>
+                        @if (ViewBag.IsAdmin == true)
+                        {
+                            <td class="small mono text-muted">@(string.IsNullOrEmpty(e.UploadedBy) ? "system" : e.UploadedBy)</td>
+                        }
+                        <td class="mono small text-muted" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@e.FilePath</td>
                         <td><partial name="_EventTypeBadge" model="e.EventType" /></td>
                         <td class="mono small">@e.FileExtension</td>
                         <td class="small">@(e.FileSize.HasValue ? $"{e.FileSize.Value / 1024.0:N0} KB" : "—")</td>

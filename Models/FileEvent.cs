@@ -57,6 +57,9 @@ namespace DLDS.Models
         [ForeignKey(nameof(MonitoredFolderId))]
         public MonitoredFolder? MonitoredFolder { get; set; }
 
+        [MaxLength(256)]
+        public string? UploadedBy { get; set; }
+
         /// <summary>Whether this row was inserted by DbInitializer for demo purposes.</summary>
         public bool IsSampleData { get; set; } = false;
     }

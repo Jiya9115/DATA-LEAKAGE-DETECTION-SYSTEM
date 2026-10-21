@@ -28,16 +28,35 @@
                 </form>
             }
             <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-controller="FileEvents" asp-action="Index" asp-route-monitoredFolderId="@Model.FolderId">
-                View All Events (@Model.TotalEvents)
+                View Events (@Model.TotalEvents)
             </a>
         </div>
     </div>
 </div>
 
+@if (!Model.IsAdmin)
+{
+    <div class="p-2 px-3 rounded mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="background:var(--accent-soft);border:1px solid rgba(34, 211, 238, 0.3)">
+        <div class="small">
+            <span>👤 <strong>User Privacy Mode:</strong> You are viewing files uploaded by your account (<strong>@Model.CurrentUser</strong>). Other users cannot see your files.</span>
+        </div>
+        <span class="badge" style="background:var(--bg-elevated);color:var(--accent)">My Files Only</span>
+    </div>
+}
+else
+{
+    <div class="p-2 px-3 rounded mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="background:rgba(245, 158, 11, 0.1);border:1px solid rgba(245, 158, 11, 0.3)">
+        <div class="small">
+            <span>👑 <strong>Administrator View:</strong> Showing all files uploaded by all users across the organization.</span>
+        </div>
+        <span class="badge" style="background:var(--bg-elevated);color:var(--risk-medium)">All Users Visible</span>
+    </div>
+}
+
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="dlds-card p-3">
-            <div class="text-muted small">Total Files on Disk</div>
+            <div class="text-muted small">@(Model.IsAdmin ? "Total Files (All Users)" : "Your Uploaded Files")</div>
             <h3 class="mb-0 mt-1" style="font-weight:700;color:var(--accent)">@Model.Files.Count</h3>
         </div>
     </div>
@@ -116,8 +135,12 @@
 <div class="dlds-card mb-4 p-0">
     <div class="p-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-color:var(--border) !important">
         <div>
-            <h5 class="mb-0" style="font-weight:700">Monitored Files in this Folder (@Model.Files.Count)</h5>
-            <div class="small text-muted">All active files stored in this directory with risk assessment and parameters</div>
+            <h5 class="mb-0" style="font-weight:700">
+                @(Model.IsAdmin ? $"All Monitored Files ({Model.Files.Count})" : $"My Uploaded Files ({Model.Files.Count})")
+            </h5>
+            <div class="small text-muted">
+                @(Model.IsAdmin ? "All files stored in this folder with uploader attribution and risk analysis" : "Files uploaded by you with risk assessment and parameters")
+            </div>
         </div>
     </div>
 
@@ -125,7 +148,7 @@
     {
         <div class="p-5 text-center">
             <div style="font-size:36px;margin-bottom:8px">📂</div>
-            <h5>No Files in this Folder Yet</h5>
+            <h5>@(Model.IsAdmin ? "No Files in this Folder Yet" : "You Haven't Uploaded Any Files to This Folder Yet")</h5>
             <p class="text-muted small">Upload a file from your Mac using the upload section above to test data leakage detection and view all parameters.</p>
         </div>
     }
@@ -136,6 +159,10 @@
                 <thead>
                     <tr>
                         <th>File Name</th>
+                        @if (Model.IsAdmin)
+                        {
+                            <th>Uploaded By</th>
+                        }
                         <th>Path</th>
                         <th>Size</th>
                         <th>Last Modified</th>
@@ -167,6 +194,14 @@
                                     <strong class="mono" style="font-size:13.5px">@file.FileName</strong>
                                 </div>
                             </td>
+                            @if (Model.IsAdmin)
+                            {
+                                <td>
+                                    <span class="badge" style="background:var(--bg-hover);color:var(--text-secondary);font-size:12px;font-family:var(--font-mono)">
+                                        👤 @file.UploadedBy
+                                    </span>
+                                </td>
+                            }
                             <td class="mono small text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@file.FullPath">
                                 @file.RelativePath
                             </td>
@@ -203,50 +238,56 @@
                                     <a class="btn-dlds btn-dlds-outline btn-dlds-sm" asp-action="DownloadFile" asp-route-id="@Model.FolderId" asp-route-fileName="@file.FileName" title="Download">
                                         ⬇
                                     </a>
-                                    <button class="btn-dlds btn-dlds-outline btn-dlds-sm" data-bs-toggle="modal" data-bs-target="#modifyModal_@file.FileName.GetHashCode()" title="Modify / Edit File">
-                                        ✏ Edit
-                                    </button>
-                                    <form asp-action="DeleteFile" asp-route-id="@Model.FolderId" asp-route-fileName="@file.FileName" method="post" class="d-inline" onsubmit="return confirm('Delete \'@file.FileName\'? This will trigger a Deletion Event, evaluate Risk, and record an Audit Log.');">
-                                        @Html.AntiForgeryToken()
-                                        <button class="btn-dlds btn-dlds-danger btn-dlds-sm" type="submit" title="Delete">
-                                            🗑
+                                    @if (file.CanManage)
+                                    {
+                                        <button class="btn-dlds btn-dlds-outline btn-dlds-sm" data-bs-toggle="modal" data-bs-target="#modifyModal_@file.FileName.GetHashCode()" title="Modify / Edit File">
+                                            ✏ Edit
                                         </button>
-                                    </form>
+                                        <form asp-action="DeleteFile" asp-route-id="@Model.FolderId" asp-route-fileName="@file.FileName" method="post" class="d-inline" onsubmit="return confirm('Delete \'@file.FileName\'? This will trigger a Deletion Event, evaluate Risk, and record an Audit Log.');">
+                                            @Html.AntiForgeryToken()
+                                            <button class="btn-dlds btn-dlds-danger btn-dlds-sm" type="submit" title="Delete">
+                                                🗑
+                                            </button>
+                                        </form>
+                                    }
                                 </div>
 
-                                <!-- Modify Modal for this file -->
-                                <div class="modal fade text-start" id="modifyModal_@file.FileName.GetHashCode()" tabindex="-1">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary)">
-                                            <form asp-action="ModifyFile" asp-route-id="@Model.FolderId" method="post" enctype="multipart/form-data">
-                                                @Html.AntiForgeryToken()
-                                                <input type="hidden" name="fileName" value="@file.FileName" />
-                                                <div class="modal-header" style="border-color:var(--border)">
-                                                    <h5 class="modal-title">Modify File: @file.FileName</h5>
-                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <p class="small text-muted">
-                                                        Modifying this file will re-trigger the Risk Assessment Engine, record a <strong>Modified</strong> event, and create a <strong>FileModified</strong> audit log entry.
-                                                    </p>
-                                                    <div class="mb-3">
-                                                        <label class="form-label-dlds">Option 1: Upload Updated Replacement File from Mac</label>
-                                                        <input type="file" name="replacementFile" class="form-control-dlds" />
+                                @if (file.CanManage)
+                                {
+                                    <!-- Modify Modal for this file -->
+                                    <div class="modal fade text-start" id="modifyModal_@file.FileName.GetHashCode()" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary)">
+                                                <form asp-action="ModifyFile" asp-route-id="@Model.FolderId" method="post" enctype="multipart/form-data">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="fileName" value="@file.FileName" />
+                                                    <div class="modal-header" style="border-color:var(--border)">
+                                                        <h5 class="modal-title">Modify File: @file.FileName</h5>
+                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                                                     </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label-dlds">Option 2: Append Content or Edit Text</label>
-                                                        <textarea name="textContent" class="form-control-dlds mono" rows="3" placeholder="Append updated data, notes, or test payloads here..."></textarea>
-                                                        <div class="small text-muted mt-1">Leaving blank will automatically simulate a modification timestamp.</div>
+                                                    <div class="modal-body">
+                                                        <p class="small text-muted">
+                                                            Modifying this file will re-trigger the Risk Assessment Engine, record a <strong>Modified</strong> event, and create a <strong>FileModified</strong> audit log entry.
+                                                        </p>
+                                                        <div class="mb-3">
+                                                            <label class="form-label-dlds">Option 1: Upload Updated Replacement File from Mac</label>
+                                                            <input type="file" name="replacementFile" class="form-control-dlds" />
+                                                        </div>
+                                                        <div class="mb-3">
+                                                            <label class="form-label-dlds">Option 2: Append Content or Edit Text</label>
+                                                            <textarea name="textContent" class="form-control-dlds mono" rows="3" placeholder="Append updated data, notes, or test payloads here..."></textarea>
+                                                            <div class="small text-muted mt-1">Leaving blank will automatically simulate a modification timestamp.</div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="modal-footer" style="border-color:var(--border)">
-                                                    <button type="button" class="btn-dlds btn-dlds-outline" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn-dlds btn-dlds-primary">Save & Record Modification</button>
-                                                </div>
-                                            </form>
+                                                    <div class="modal-footer" style="border-color:var(--border)">
+                                                        <button type="button" class="btn-dlds btn-dlds-outline" data-bs-dismiss="modal">Cancel</button>
+                                                        <button type="submit" class="btn-dlds btn-dlds-primary">Save & Record Modification</button>
+                                                    </div>
+                                                </form>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                }
                             </td>
                         </tr>
                     }
@@ -262,7 +303,7 @@
     <div class="dlds-card p-0">
         <div class="p-3 border-bottom d-flex justify-content-between align-items-center" style="border-color:var(--border) !important">
             <h5 class="mb-0" style="font-weight:700">Recent File Activity for this Folder</h5>
-            <a class="small" asp-controller="FileEvents" asp-action="Index" asp-route-monitoredFolderId="@Model.FolderId">View all in Explorer &rarr;</a>
+            <a class="small" asp-controller="FileEvents" asp-action="Index" asp-route-monitoredFolderId="@Model.FolderId">View in Explorer &rarr;</a>
         </div>
         <div class="table-scroll">
             <table class="dlds-table">
@@ -270,6 +311,10 @@
                     <tr>
                         <th>Time</th>
                         <th>File Name</th>
+                        @if (Model.IsAdmin)
+                        {
+                            <th>User</th>
+                        }
                         <th>Event</th>
                         <th>Risk Score</th>
                         <th>Risk Level</th>
@@ -282,6 +327,10 @@
                         <tr style="cursor:pointer" onclick="location.href='@Url.Action("Details", "FileEvents", new { id = ev.Id })'">
                             <td class="small text-muted mono">@ev.EventTimestamp.ToString("MMM dd, HH:mm:ss")</td>
                             <td class="mono font-weight-bold">@ev.FileName</td>
+                            @if (Model.IsAdmin)
+                            {
+                                <td class="small mono text-muted">@(string.IsNullOrEmpty(ev.UploadedBy) ? "system" : ev.UploadedBy)</td>
+                            }
                             <td><partial name="_EventTypeBadge" model="ev.EventType" /></td>
                             <td class="mono font-weight-bold">@ev.RiskScore</td>
                             <td><partial name="_RiskBadge" model="ev.RiskLevel" /></td>

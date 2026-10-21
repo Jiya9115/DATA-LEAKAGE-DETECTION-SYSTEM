@@ -49,7 +49,14 @@ else
                         <div class="small mb-2" style="color:var(--risk-high)">⚠ Path not found on this machine</div>
                     }
                     <div class="d-flex gap-3 mb-3 small text-muted flex-wrap">
-                        <span><strong style="color:var(--accent)">@f.FileCount</strong> files</span>
+                        @if (f.IsAdmin)
+                        {
+                            <span><strong style="color:var(--accent)">@f.FileCount</strong> files</span>
+                        }
+                        else
+                        {
+                            <span><strong style="color:var(--accent)">@f.UserFileCount</strong> of @f.FileCount files (by you)</span>
+                        }
                         <span><strong style="color:var(--text-primary)">@f.TotalEvents</strong> events</span>
                         <span><strong style="color:var(--risk-high)">@f.RiskEvents</strong> risk events</span>
                     </div>

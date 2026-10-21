@@ -19,13 +19,24 @@ namespace DLDS.Controllers
 
         public async Task<IActionResult> Index()
         {
-            var events = await _db.FileEvents.AsNoTracking().ToListAsync();
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "";
+
+            var eventsQuery = _db.FileEvents.AsNoTracking();
+            if (!isAdmin)
+            {
+                eventsQuery = eventsQuery.Where(e => e.UploadedBy == currentUsername || (e.UploadedBy == null && e.IsSampleData));
+            }
+            var events = await eventsQuery.ToListAsync();
+
             var folders = await _db.MonitoredFolders.AsNoTracking().ToListAsync();
-            var alerts = await _db.Alerts.AsNoTracking()
-                .Include(a => a.FileEvent)
-                .OrderByDescending(a => a.CreatedAt)
-                .Take(8)
-                .ToListAsync();
+
+            var alertsQuery = _db.Alerts.AsNoTracking().Include(a => a.FileEvent).AsQueryable();
+            if (!isAdmin)
+            {
+                alertsQuery = alertsQuery.Where(a => a.FileEvent != null && (a.FileEvent.UploadedBy == currentUsername || (a.FileEvent.UploadedBy == null && a.FileEvent.IsSampleData)));
+            }
+            var alerts = await alertsQuery.OrderByDescending(a => a.CreatedAt).Take(8).ToListAsync();
 
             var vm = new DashboardViewModel
             {
@@ -65,8 +76,16 @@ namespace DLDS.Controllers
         [HttpGet]
         public async Task<IActionResult> LatestEventsJson(int take = 15)
         {
-            var events = await _db.FileEvents.AsNoTracking()
-                .Include(e => e.MonitoredFolder)
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "";
+
+            var query = _db.FileEvents.AsNoTracking().Include(e => e.MonitoredFolder).AsQueryable();
+            if (!isAdmin)
+            {
+                query = query.Where(e => e.UploadedBy == currentUsername || (e.UploadedBy == null && e.IsSampleData));
+            }
+
+            var events = await query
                 .OrderByDescending(e => e.EventTimestamp)
                 .Take(take)
                 .Select(e => new

@@ -19,7 +19,15 @@ namespace DLDS.Controllers
 
         public async Task<IActionResult> Index(FileEventListViewModel filter)
         {
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "";
+
             var query = _db.FileEvents.AsNoTracking().Include(e => e.MonitoredFolder).AsQueryable();
+
+            if (!isAdmin)
+            {
+                query = query.Where(e => e.UploadedBy == currentUsername || (e.UploadedBy == null && e.IsSampleData));
+            }
 
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
@@ -62,6 +70,9 @@ namespace DLDS.Controllers
             filter.Page = page;
             filter.PageSize = pageSize;
 
+            ViewBag.IsAdmin = isAdmin;
+            ViewBag.CurrentUsername = currentUsername;
+
             return View(filter);
         }
 
@@ -72,6 +83,14 @@ namespace DLDS.Controllers
                 .FirstOrDefaultAsync(e => e.Id == id);
 
             if (fileEvent == null) return NotFound();
+
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "";
+
+            if (!isAdmin && !fileEvent.IsSampleData && !string.IsNullOrEmpty(fileEvent.UploadedBy) && !string.Equals(fileEvent.UploadedBy, currentUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
 
             return View(fileEvent);
         }

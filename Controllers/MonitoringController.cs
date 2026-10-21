@@ -5,9 +5,16 @@ using DLDS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace DLDS.Controllers
 {
+    public class FileMetadataEntry
+    {
+        public string UploadedBy { get; set; } = string.Empty;
+        public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+    }
+
     [Authorize]
     public class MonitoringController : Controller
     {
@@ -33,14 +40,25 @@ namespace DLDS.Controllers
 
         public async Task<IActionResult> Index()
         {
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "";
+
             var folders = await _db.MonitoredFolders.AsNoTracking().ToListAsync();
-            var eventCounts = await _db.FileEvents.AsNoTracking()
+
+            var eventsQuery = _db.FileEvents.AsNoTracking();
+            if (!isAdmin)
+            {
+                eventsQuery = eventsQuery.Where(e => e.UploadedBy == currentUsername || (e.UploadedBy == null && e.IsSampleData));
+            }
+
+            var eventCounts = await eventsQuery
                 .GroupBy(e => e.MonitoredFolderId)
                 .Select(g => new { FolderId = g.Key, Total = g.Count(), Risk = g.Count(e => e.RiskLevel == RiskLevel.High || e.RiskLevel == RiskLevel.Critical), Last = g.Max(e => e.EventTimestamp) })
                 .ToListAsync();
 
             var vm = new MonitoringViewModel
             {
+                IsAdmin = isAdmin,
                 Folders = folders.Select(f =>
                 {
                     var stats = eventCounts.FirstOrDefault(x => x.FolderId == f.Id);
@@ -51,12 +69,24 @@ namespace DLDS.Controllers
                     }
 
                     int fileCount = 0;
+                    int userFileCount = 0;
                     if (pathExists)
                     {
                         try
                         {
-                            fileCount = Directory.EnumerateFiles(f.FolderPath, "*", SearchOption.AllDirectories)
-                                .Count(fn => !Path.GetFileName(fn).StartsWith("."));
+                            var meta = LoadFolderMetadata(f.FolderPath);
+                            var allFiles = Directory.EnumerateFiles(f.FolderPath, "*", SearchOption.AllDirectories)
+                                .Where(fn => !Path.GetFileName(fn).StartsWith(".") && !fn.EndsWith(".dlds_metadata.json"))
+                                .ToList();
+
+                            fileCount = allFiles.Count;
+                            userFileCount = allFiles.Count(fn =>
+                            {
+                                var name = Path.GetFileName(fn);
+                                if (meta.TryGetValue(name, out var entry))
+                                    return string.Equals(entry.UploadedBy, currentUsername, StringComparison.OrdinalIgnoreCase);
+                                return false;
+                            });
                         }
                         catch { }
                     }
@@ -71,6 +101,8 @@ namespace DLDS.Controllers
                         TotalEvents = stats?.Total ?? 0,
                         RiskEvents = stats?.Risk ?? 0,
                         FileCount = fileCount,
+                        UserFileCount = userFileCount,
+                        IsAdmin = isAdmin,
                         LastMonitoredAt = f.LastMonitoredAt,
                         LastEventAt = stats?.Last,
                         PathExists = pathExists
@@ -87,16 +119,21 @@ namespace DLDS.Controllers
             var folder = await _db.MonitoredFolders.FindAsync(id);
             if (folder == null) return NotFound();
 
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "";
+
             bool pathExists = Directory.Exists(folder.FolderPath);
             if (!pathExists && (folder.FolderPath.Contains("App_Data") || folder.FolderPath.Contains("Documents_Security")))
             {
                 try { Directory.CreateDirectory(folder.FolderPath); pathExists = true; } catch { }
             }
 
-            var events = await _db.FileEvents.AsNoTracking()
-                .Where(e => e.MonitoredFolderId == id)
-                .OrderByDescending(e => e.EventTimestamp)
-                .ToListAsync();
+            var eventsQuery = _db.FileEvents.AsNoTracking().Where(e => e.MonitoredFolderId == id);
+            if (!isAdmin)
+            {
+                eventsQuery = eventsQuery.Where(e => e.UploadedBy == currentUsername || (e.UploadedBy == null && e.IsSampleData));
+            }
+            var events = await eventsQuery.OrderByDescending(e => e.EventTimestamp).ToListAsync();
 
             var fileList = new List<FolderFileItemViewModel>();
 
@@ -104,9 +141,10 @@ namespace DLDS.Controllers
             {
                 try
                 {
+                    var meta = LoadFolderMetadata(folder.FolderPath);
                     var dirInfo = new DirectoryInfo(folder.FolderPath);
                     var fsFiles = dirInfo.EnumerateFiles("*", SearchOption.AllDirectories)
-                        .Where(f => !f.Name.StartsWith(".") && !f.Attributes.HasFlag(FileAttributes.Hidden))
+                        .Where(f => !f.Name.StartsWith(".") && !f.Name.Equals(".dlds_metadata.json", StringComparison.OrdinalIgnoreCase) && !f.Attributes.HasFlag(FileAttributes.Hidden))
                         .OrderByDescending(f => f.LastWriteTimeUtc);
 
                     foreach (var file in fsFiles)
@@ -115,6 +153,26 @@ namespace DLDS.Controllers
                         var matchingEvents = events.Where(e => e.FileName.Equals(file.Name, StringComparison.OrdinalIgnoreCase)
                                                             || e.FilePath.EndsWith(relPath)).ToList();
                         var latestEvent = matchingEvents.FirstOrDefault();
+
+                        string uploader = "";
+                        if (meta.TryGetValue(file.Name, out var entry) && !string.IsNullOrEmpty(entry.UploadedBy))
+                        {
+                            uploader = entry.UploadedBy;
+                        }
+                        else if (latestEvent != null && !string.IsNullOrEmpty(latestEvent.UploadedBy))
+                        {
+                            uploader = latestEvent.UploadedBy;
+                        }
+                        else
+                        {
+                            uploader = "admin@dlds.local";
+                        }
+
+                        // RBAC FILTER: Regular users ONLY see files they uploaded
+                        if (!isAdmin && !string.Equals(uploader, currentUsername, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
 
                         fileList.Add(new FolderFileItemViewModel
                         {
@@ -129,7 +187,9 @@ namespace DLDS.Controllers
                             LatestRiskScore = latestEvent?.RiskScore,
                             LatestEventType = latestEvent?.EventType,
                             LatestDescription = latestEvent?.Description,
-                            EventCount = matchingEvents.Count
+                            EventCount = matchingEvents.Count,
+                            UploadedBy = uploader,
+                            CanManage = isAdmin || string.Equals(uploader, currentUsername, StringComparison.OrdinalIgnoreCase)
                         });
                     }
                 }
@@ -151,6 +211,8 @@ namespace DLDS.Controllers
                 RiskEvents = events.Count(e => e.RiskLevel == RiskLevel.High || e.RiskLevel == RiskLevel.Critical),
                 CreatedAt = folder.CreatedAt,
                 LastMonitoredAt = folder.LastMonitoredAt,
+                IsAdmin = isAdmin,
+                CurrentUser = currentUsername,
                 Files = fileList,
                 RecentEvents = events.Take(30).ToList()
             };
@@ -176,6 +238,7 @@ namespace DLDS.Controllers
                 Directory.CreateDirectory(folder.FolderPath);
             }
 
+            var meta = LoadFolderMetadata(folder.FolderPath);
             int processed = 0;
             var username = User.Identity?.Name ?? "system";
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -188,6 +251,14 @@ namespace DLDS.Controllers
                 var targetPath = Path.Combine(folder.FolderPath, safeName);
                 bool isModify = System.IO.File.Exists(targetPath);
                 var eventType = isModify ? EventType.Modified : EventType.Created;
+
+                // Check ownership if replacing existing file
+                bool isAdmin = User.IsInRole(Roles.Administrator);
+                if (isModify && !isAdmin && meta.TryGetValue(safeName, out var existingMeta) && !string.Equals(existingMeta.UploadedBy, username, StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["Error"] = $"A file named \"{safeName}\" already exists and was uploaded by another user.";
+                    continue;
+                }
 
                 // Mark processed so background watcher does not duplicate event
                 _monitoring.MarkEventProcessed(folder.Id, targetPath, eventType);
@@ -215,11 +286,19 @@ namespace DLDS.Controllers
                     RiskLevel = assessment.RiskLevel,
                     RiskScore = assessment.RiskScore,
                     Description = assessment.Reason,
-                    MonitoredFolderId = folder.Id
+                    MonitoredFolderId = folder.Id,
+                    UploadedBy = username
                 };
 
                 _db.FileEvents.Add(fileEvent);
                 await _db.SaveChangesAsync();
+
+                // Save ownership metadata
+                meta[safeName] = new FileMetadataEntry
+                {
+                    UploadedBy = username,
+                    UploadedAt = DateTime.UtcNow
+                };
 
                 await _alerts.CreateAlertIfNeededAsync(fileEvent, assessment.Reason);
 
@@ -238,6 +317,8 @@ namespace DLDS.Controllers
 
                 processed++;
             }
+
+            SaveFolderMetadata(folder.FolderPath, meta);
 
             folder.LastMonitoredAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
@@ -262,6 +343,16 @@ namespace DLDS.Controllers
                 return RedirectToAction(nameof(Details), new { id });
             }
 
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "system";
+            var meta = LoadFolderMetadata(folder.FolderPath);
+
+            // Ownership check
+            if (!isAdmin && meta.TryGetValue(safeName, out var entry) && !string.Equals(entry.UploadedBy, currentUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
+
             _monitoring.MarkEventProcessed(folder.Id, targetPath, EventType.Modified);
 
             long newSize = 0;
@@ -280,7 +371,8 @@ namespace DLDS.Controllers
             }
             else
             {
-                await System.IO.File.AppendAllTextAsync(targetPath, $"\n# Modified by DLDS at {DateTime.UtcNow:u}\n");
+                // Append modification timestamp to simulate modification
+                await System.IO.File.AppendAllTextAsync(targetPath, $"\n# Modified by {currentUsername} at {DateTime.UtcNow:u}\n");
                 newSize = new FileInfo(targetPath).Length;
             }
 
@@ -302,7 +394,8 @@ namespace DLDS.Controllers
                 RiskLevel = assessment.RiskLevel,
                 RiskScore = assessment.RiskScore,
                 Description = assessment.Reason,
-                MonitoredFolderId = folder.Id
+                MonitoredFolderId = folder.Id,
+                UploadedBy = currentUsername
             };
 
             _db.FileEvents.Add(fileEvent);
@@ -310,14 +403,13 @@ namespace DLDS.Controllers
 
             await _alerts.CreateAlertIfNeededAsync(fileEvent, assessment.Reason);
 
-            var username = User.Identity?.Name ?? "system";
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             _db.AuditLogs.Add(new AuditLog
             {
                 Action = "FileModified",
-                Description = $"User '{username}' modified file '{safeName}' ({FormatBytes(newSize)}) in folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}",
-                Username = username,
+                Description = $"User '{currentUsername}' modified file '{safeName}' ({FormatBytes(newSize)}) in folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}",
+                Username = currentUsername,
                 IPAddress = ipAddress,
                 Timestamp = DateTime.UtcNow
             });
@@ -340,11 +432,24 @@ namespace DLDS.Controllers
             var safeName = Path.GetFileName(fileName);
             var targetPath = Path.Combine(folder.FolderPath, safeName);
 
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "system";
+            var meta = LoadFolderMetadata(folder.FolderPath);
+
+            // Ownership check
+            if (!isAdmin && meta.TryGetValue(safeName, out var entry) && !string.Equals(entry.UploadedBy, currentUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
+
             if (System.IO.File.Exists(targetPath))
             {
                 _monitoring.MarkEventProcessed(folder.Id, targetPath, EventType.Deleted);
                 System.IO.File.Delete(targetPath);
             }
+
+            meta.Remove(safeName);
+            SaveFolderMetadata(folder.FolderPath, meta);
 
             var assessment = await _risk.AssessAsync(
                 safeName,
@@ -364,7 +469,8 @@ namespace DLDS.Controllers
                 RiskLevel = assessment.RiskLevel,
                 RiskScore = assessment.RiskScore,
                 Description = assessment.Reason,
-                MonitoredFolderId = folder.Id
+                MonitoredFolderId = folder.Id,
+                UploadedBy = currentUsername
             };
 
             _db.FileEvents.Add(fileEvent);
@@ -372,14 +478,13 @@ namespace DLDS.Controllers
 
             await _alerts.CreateAlertIfNeededAsync(fileEvent, assessment.Reason);
 
-            var username = User.Identity?.Name ?? "system";
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             _db.AuditLogs.Add(new AuditLog
             {
                 Action = "FileDeleted",
-                Description = $"User '{username}' deleted file '{safeName}' from folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}",
-                Username = username,
+                Description = $"User '{currentUsername}' deleted file '{safeName}' from folder '{folder.FolderName}'. Risk: {assessment.RiskLevel} (Score: {assessment.RiskScore}) — {assessment.Reason}",
+                Username = currentUsername,
                 IPAddress = ipAddress,
                 Timestamp = DateTime.UtcNow
             });
@@ -402,6 +507,15 @@ namespace DLDS.Controllers
             var targetPath = Path.Combine(folder.FolderPath, safeName);
 
             if (!System.IO.File.Exists(targetPath)) return NotFound();
+
+            bool isAdmin = User.IsInRole(Roles.Administrator);
+            var currentUsername = User.Identity?.Name ?? "system";
+            var meta = LoadFolderMetadata(folder.FolderPath);
+
+            if (!isAdmin && meta.TryGetValue(safeName, out var entry) && !string.Equals(entry.UploadedBy, currentUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                return Forbid();
+            }
 
             return PhysicalFile(targetPath, "application/octet-stream", safeName);
         }
@@ -551,6 +665,36 @@ namespace DLDS.Controllers
                 i++;
             }
             return $"{d:0.##} {suffixes[i]}";
+        }
+
+        private static string GetMetadataFilePath(string folderPath) =>
+            Path.Combine(folderPath, ".dlds_metadata.json");
+
+        private static Dictionary<string, FileMetadataEntry> LoadFolderMetadata(string folderPath)
+        {
+            try
+            {
+                var metaFile = GetMetadataFilePath(folderPath);
+                if (System.IO.File.Exists(metaFile))
+                {
+                    var json = System.IO.File.ReadAllText(metaFile);
+                    return JsonSerializer.Deserialize<Dictionary<string, FileMetadataEntry>>(json) 
+                           ?? new Dictionary<string, FileMetadataEntry>(StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+            return new Dictionary<string, FileMetadataEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static void SaveFolderMetadata(string folderPath, Dictionary<string, FileMetadataEntry> metadata)
+        {
+            try
+            {
+                var metaFile = GetMetadataFilePath(folderPath);
+                var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(metaFile, json);
+            }
+            catch { }
         }
     }
 }

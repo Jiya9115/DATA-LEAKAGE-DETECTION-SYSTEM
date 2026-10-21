@@ -7,6 +7,7 @@ namespace DLDS.ViewModels
     {
         public List<MonitoredFolderCardViewModel> Folders { get; set; } = new();
         public AddFolderViewModel NewFolder { get; set; } = new();
+        public bool IsAdmin { get; set; }
     }
 
     public class MonitoredFolderCardViewModel
@@ -19,6 +20,8 @@ namespace DLDS.ViewModels
         public int TotalEvents { get; set; }
         public int RiskEvents { get; set; }
         public int FileCount { get; set; }
+        public int UserFileCount { get; set; }
+        public bool IsAdmin { get; set; }
         public DateTime? LastMonitoredAt { get; set; }
         public DateTime? LastEventAt { get; set; }
         public bool PathExists { get; set; }
@@ -50,6 +53,8 @@ namespace DLDS.ViewModels
         public int RiskEvents { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? LastMonitoredAt { get; set; }
+        public bool IsAdmin { get; set; }
+        public string CurrentUser { get; set; } = string.Empty;
         public List<FolderFileItemViewModel> Files { get; set; } = new();
         public List<FileEvent> RecentEvents { get; set; } = new();
     }
@@ -68,5 +73,7 @@ namespace DLDS.ViewModels
         public EventType? LatestEventType { get; set; }
         public string? LatestDescription { get; set; }
         public int EventCount { get; set; }
+        public string UploadedBy { get; set; } = string.Empty;
+        public bool CanManage { get; set; }
     }
 }

@@ -146,6 +146,19 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
+        try
+        {
+            if (db.Database.IsSqlite())
+            {
+                db.Database.ExecuteSqlRaw("ALTER TABLE FileEvents ADD COLUMN UploadedBy TEXT NULL;");
+            }
+            else if (db.Database.IsSqlServer())
+            {
+                db.Database.ExecuteSqlRaw("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('FileEvents') AND name = 'UploadedBy') ALTER TABLE FileEvents ADD UploadedBy NVARCHAR(256) NULL;");
+            }
+        }
+        catch { /* Column already exists */ }
+
         await DbInitializer.SeedAsync(services);
         logger.LogInformation("Database initialized and seeded successfully.");
     }
