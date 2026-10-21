@@ -1,36 +1,222 @@
 @{
     Layout = "_PublicLayout";
-    ViewData["Title"] = "About";
+    ViewData["Title"] = "About & Security Risk Model";
 }
-<div class="page-content" style="max-width:820px">
-    <h1 class="mb-4">About DLDS</h1>
 
-    <h5>What is data leakage?</h5>
-    <p class="text-secondary-dlds">Data leakage refers to the unauthorized or unintended movement, exposure, or destruction of sensitive information. It can happen through accidental deletion, unauthorized copying, malicious exfiltration, or misconfigured systems, and often leaves traces in ordinary file-system activity.</p>
-
-    <h5>Why file monitoring matters</h5>
-    <p class="text-secondary-dlds">Most data leakage incidents involve files being created, modified, deleted, or moved. Watching for unusual patterns in that activity — large sensitive files being created unexpectedly, rapid mass deletions, or scripts appearing in monitored locations — gives an early signal that something may need review.</p>
-
-    <h5>How FileSystemWatcher works</h5>
-    <p class="text-secondary-dlds">DLDS uses .NET's <span class="mono">FileSystemWatcher</span> to subscribe to operating-system-level notifications for a folder tree: creation, deletion, modification, and rename events. A background hosted service manages one watcher per active monitored folder, debounces duplicate notifications the OS can emit for a single save, and records every distinct event.</p>
-
-    <h5>How risk assessment works</h5>
-    <p class="text-secondary-dlds">Each event is scored by the Risk Assessment Service against administrator-configured rules (event type, extension, minimum size) and, where no rule matches, a set of built-in heuristics (rapid deletions, large files, sensitive extensions, executable/script files). Every score comes with a plain-language, explainable reason.</p>
-
-    <h5>How the system helps organizations</h5>
-    <p class="text-secondary-dlds">DLDS gives security-conscious teams and students a working example of continuous file monitoring, risk scoring, alerting, and audit trails — the same building blocks used in real data-loss-prevention tooling, without the licensing overhead of a commercial DLP platform.</p>
-
-    <div class="dlds-card mt-4" style="border-left:4px solid var(--risk-medium)">
-        <strong>Important:</strong>
-        <p class="mb-0 text-secondary-dlds">DLDS is a monitoring and detection system. It surfaces <em>Potential Data Leakage Activity</em> and <em>Suspicious File Activity</em> for human review — it does not, and cannot, guarantee 100% leak prevention or definitively prove that a leak occurred.</p>
+<div class="page-content" style="max-width:960px;margin:0 auto;padding-top:32px;padding-bottom:64px;">
+    <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="mb-1" style="font-weight:700">About DLDS & Security Risk Model</h1>
+            <p class="text-secondary-dlds mb-0">Understand how data leakage detection works and which parameters determine the risk score of files.</p>
+        </div>
+        @if (User?.Identity?.IsAuthenticated == true)
+        {
+            <a class="btn-dlds btn-dlds-primary btn-dlds-sm" asp-controller="Dashboard" asp-action="Index">Go to Dashboard &rarr;</a>
+        }
     </div>
 
-    <h5 class="mt-4">Technology stack</h5>
-    <ul class="text-secondary-dlds">
-        <li>ASP.NET Core MVC (C#) — cross-platform, runs on macOS</li>
-        <li>Entity Framework Core + SQL Server</li>
-        <li>ASP.NET Core Identity for authentication/roles</li>
-        <li>Bootstrap 5, vanilla JavaScript, Chart.js</li>
-        <li><span class="mono">FileSystemWatcher</span> running inside a <span class="mono">BackgroundService</span></li>
-    </ul>
+    <!-- Core Security Risk Parameters Section -->
+    <div class="dlds-card mb-4" style="border-left: 4px solid var(--accent)">
+        <h4 class="mb-2" style="font-weight:700;color:var(--text-primary)">
+            🛡️ How Security Risk is Evaluated (Risk Parameters)
+        </h4>
+        <p class="text-secondary-dlds mb-4">
+            Whenever a file is uploaded, modified, or deleted, DLDS evaluates it against <strong>5 core parameters</strong> to calculate a dynamic risk score from <strong>0 to 100</strong>.
+        </p>
+
+        <div class="row g-3">
+            <!-- Parameter 1: File Type -->
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span style="font-size:22px">📄</span>
+                        <strong style="color:var(--text-primary)">1. File Type & Extension</strong>
+                    </div>
+                    <p class="small text-secondary-dlds mb-2">
+                        The system inspects the file extension to determine whether it contains sensitive business records or executable code:
+                    </p>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li><strong>Safe Formats:</strong> <code>.txt</code>, <code>.png</code>, <code>.jpg</code> (Routine Baseline: Score 10)</li>
+                        <li><strong>Sensitive Data:</strong> <code>.xlsx</code>, <code>.pdf</code>, <code>.sql</code>, <code>.csv</code>, <code>.key</code>, <code>.pem</code> (Elevated: Score 30–70)</li>
+                        <li><strong>Scripts & Executables:</strong> <code>.ps1</code>, <code>.sh</code>, <code>.exe</code>, <code>.bat</code>, <code>.command</code> (High/Critical: Score 70–80)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Parameter 2: Duplication -->
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span style="font-size:22px">📋</span>
+                        <strong style="color:var(--text-primary)">2. File Duplication & Data Staging</strong>
+                    </div>
+                    <p class="small text-secondary-dlds mb-2">
+                        Detects if an employee or attacker has duplicated a file before exfiltrating it:
+                    </p>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li><strong>Copy Suffixes:</strong> Detects <code>copy</code>, <code>(1)</code>, <code>backup</code>, or <code>_dup</code> in filenames.</li>
+                        <li><strong>Content Matching:</strong> Detects identical file size and structure across folders.</li>
+                        <li><strong>Sensitive Duplication:</strong> Duplicating sensitive records triggers <strong>Critical Risk (Score 85)</strong> due to high likelihood of data exfiltration preparation.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Parameter 3: File Size -->
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span style="font-size:22px">📦</span>
+                        <strong style="color:var(--text-primary)">3. File Size (Bulk Exfiltration)</strong>
+                    </div>
+                    <p class="small text-secondary-dlds mb-2">
+                        Evaluates whether the file size is unusually large:
+                    </p>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li><strong>Standard Files:</strong> Everyday document sizes receive no penalty.</li>
+                        <li><strong>Large Sensitive Files (&ge; 25 MB):</strong> Flagged with <strong>High Risk (Score 60)</strong> as bulk archives usually indicate mass database dumps or bulk employee record theft.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Parameter 4: Action Type -->
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span style="font-size:22px">⚡</span>
+                        <strong style="color:var(--text-primary)">4. Action Type (Created, Modified, Deleted)</strong>
+                    </div>
+                    <p class="small text-secondary-dlds mb-2">
+                        The operation performed dictates how the event is scored:
+                    </p>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li><strong>Created:</strong> Evaluated based on extension, size, and duplicate heuristics.</li>
+                        <li><strong>Modified:</strong> Modifying sensitive spreadsheets triggers configured high risk rules.</li>
+                        <li><strong>Deleted:</strong> Deleting sensitive files (<code>.sql</code>, <code>.pdf</code>, <code>.xlsx</code>) is scored as <strong>High Risk (Score 65)</strong> to catch evidence destruction or data loss.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Parameter 5: Speed / Frequency -->
+            <div class="col-12">
+                <div class="p-3 rounded" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span style="font-size:22px">⏱️</span>
+                        <strong style="color:var(--text-primary)">5. Activity Speed & Frequency (Ransomware / Mass Wipe Heuristic)</strong>
+                    </div>
+                    <p class="small text-secondary-dlds mb-0">
+                        Tracks temporal patterns within a <strong>60-second sliding window</strong>. If <strong>3 or more sensitive files</strong> are deleted within 60 seconds in the same folder, the system triggers a <strong>Critical Risk Score of 95</strong> to detect automated ransomware destruction or insider wipe attacks.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Level Scale Table -->
+    <div class="dlds-card mb-4 p-0">
+        <div class="p-3 border-bottom" style="border-color:var(--border) !important">
+            <h5 class="mb-0" style="font-weight:700">Risk Score Hierarchy & System Response</h5>
+        </div>
+        <div class="table-scroll">
+            <table class="dlds-table">
+                <thead>
+                    <tr>
+                        <th>Risk Level</th>
+                        <th>Score Range</th>
+                        <th>Triggering Parameters & Scenarios</th>
+                        <th>Alert Generated?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="risk-badge risk-critical">CRITICAL</span></td>
+                        <td class="mono font-weight-bold" style="color:var(--risk-critical)">80 – 100</td>
+                        <td class="small text-secondary-dlds">
+                            Rapid mass deletions in 60s (95), duplicate sensitive file copy (85), unauthorized script upload (80).
+                        </td>
+                        <td><span class="status-pill" style="background:rgba(239, 68, 68, 0.15);color:var(--risk-critical)">Immediate Alert</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="risk-badge risk-high">HIGH</span></td>
+                        <td class="mono font-weight-bold" style="color:var(--risk-high)">60 – 79</td>
+                        <td class="small text-secondary-dlds">
+                            Sensitive file deleted (65), SQL database dump created (70), large sensitive file &ge; 25 MB (60), modified spreadsheet.
+                        </td>
+                        <td><span class="status-pill" style="background:rgba(249, 115, 22, 0.15);color:var(--risk-high)">Immediate Alert</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="risk-badge risk-medium">MEDIUM</span></td>
+                        <td class="mono font-weight-bold" style="color:var(--risk-medium)">30 – 59</td>
+                        <td class="small text-secondary-dlds">
+                            Routine sensitive document created (30), normal large file &ge; 25 MB (40), archive deleted (55).
+                        </td>
+                        <td><span class="text-muted small">Logged, No Alert</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="risk-badge risk-low">LOW</span></td>
+                        <td class="mono font-weight-bold" style="color:var(--risk-low)">0 – 29</td>
+                        <td class="small text-secondary-dlds">
+                            Standard everyday files (<code>.txt</code>, <code>.png</code>, <code>.jpg</code>) created or edited normally (10).
+                        </td>
+                        <td><span class="text-muted small">Logged, No Alert</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- User Privacy & Security Model -->
+    <div class="dlds-card mb-4">
+        <h5 style="font-weight:700">Role-Based Access Control (RBAC) & Privacy</h5>
+        <p class="text-secondary-dlds mb-3">
+            DLDS enforces strict data isolation between regular users and system administrators:
+        </p>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background:var(--accent-soft);color:var(--accent)">User Role</span>
+                        <strong style="color:var(--text-primary)">Regular Users</strong>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Can only see and manage files that they themselves uploaded. Files belonging to other users are hidden, ensuring privacy and compartmentalization.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background:var(--bg);border:1px solid var(--border)">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background:rgba(245, 158, 11, 0.15);color:var(--risk-medium)">Admin Role</span>
+                        <strong style="color:var(--text-primary)">Administrators</strong>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Have full supervisory access across all folders. The files explorer displays an <strong>Uploaded By</strong> attribution tag for every file, enabling complete security audits.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About DLDS & Tech Stack -->
+    <div class="dlds-card">
+        <h5 style="font-weight:700">What is DLDS?</h5>
+        <p class="text-secondary-dlds">
+            DLDS (Data Leakage Detection System) is a cross-platform ASP.NET Core MVC application designed to monitor directories in real-time, detect file creation, modification, deletion, and duplicate events, score each action for security risk, raise real-time alerts, and maintain an immutable audit trail.
+        </p>
+        <div class="dlds-card p-3 mb-3" style="background:var(--bg);border-left:4px solid var(--risk-medium)">
+            <strong style="color:var(--text-primary)">System Purpose:</strong>
+            <p class="mb-0 text-secondary-dlds small">
+                DLDS surfaces <em>Potential Data Leakage Activity</em> and <em>Suspicious File Activity</em> for human review. It serves as an explainable, open detection framework providing continuous file telemetry, risk heuristics, and audit logging.
+            </p>
+        </div>
+        <h6 class="mt-3 mb-2" style="font-weight:600">Technology Stack</h6>
+        <div class="d-flex flex-wrap gap-2">
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">ASP.NET Core (.NET 8)</span>
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">Entity Framework Core</span>
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">SQLite / SQL Server</span>
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">ASP.NET Core Identity</span>
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">FileSystemWatcher</span>
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">Chart.js</span>
+            <span class="status-pill" style="background:var(--bg);color:var(--text-primary)">Bootstrap 5</span>
+        </div>
+    </div>
 </div>
